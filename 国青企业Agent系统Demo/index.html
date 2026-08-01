@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>国青企业 Agent 系统 · 一阶段 Demo</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 登录页 -->
+    <div id="login-view" class="login-view">
+      <div class="login-brand">
+        <div class="login-brand-inner">
+          <div class="brand-mark brand-mark-lg">国</div>
+          <div class="login-kicker">国青科技 · 本地化企业级 Agent 平台</div>
+          <h1>国青企业 Agent 系统</h1>
+          <p class="login-tagline">政策申报 · 产业服务 · 智能协同</p>
+          <div class="login-flow" aria-hidden="true">
+            <div class="flow-node"><span class="flow-ico">知</span><span>知识底座</span></div>
+            <div class="flow-line"><i></i><i></i><i></i></div>
+            <div class="flow-node"><span class="flow-ico">AI</span><span>行业 Agent</span></div>
+            <div class="flow-line"><i></i><i></i><i></i></div>
+            <div class="flow-node"><span class="flow-ico">申</span><span>申报交付</span></div>
+          </div>
+          <div class="login-stats">
+            <div><b>12</b><span>核心功能</span></div>
+            <div><b>7</b><span>业务 Agent</span></div>
+            <div><b>6</b><span>能力模块</span></div>
+            <div><b>4</b><span>交付里程碑</span></div>
+          </div>
+          <div class="login-secure">
+            <span class="dot dot-green"></span> 本地化部署 · 权限校验 · 全程审计留痕
+          </div>
+        </div>
+      </div>
+      <div class="login-panel">
+        <div class="login-card">
+          <div class="login-card-head">
+            <h2>登录演示环境</h2>
+            <p>选择演示角色进入系统，数据均为本地演示数据</p>
+          </div>
+          <label class="field">
+            <span>账号</span>
+            <input id="login-account" type="text" value="pm01" autocomplete="username">
+          </label>
+          <label class="field">
+            <span>密码</span>
+            <input id="login-password" type="password" value="demo1234" autocomplete="current-password">
+          </label>
+          <label class="field">
+            <span>演示角色</span>
+            <select id="login-role">
+              <option value="申报顾问">申报顾问</option>
+              <option value="项目经理">项目经理</option>
+              <option value="系统管理员">系统管理员</option>
+            </select>
+          </label>
+          <button id="login-btn" class="btn btn-primary btn-block">登录系统</button>
+          <div class="login-hint">演示账号已自动填充，点击登录即可</div>
+          <div class="login-roles">
+            <button class="role-chip active" data-role="申报顾问">申报顾问</button>
+            <button class="role-chip" data-role="项目经理">项目经理</button>
+            <button class="role-chip" data-role="系统管理员">系统管理员</button>
+          </div>
+        </div>
+        <div class="login-foot">国青企业 Agent 系统 V1.0 演示版 · 依据《一阶段开发功能清单 V1.0》构建</div>
+      </div>
+    </div>
+
+    <!-- 主应用 -->
+    <div id="app-shell" class="app-shell hidden">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+          <span class="brand-mark">国</span>
+          <div>
+            <div class="brand-name">国青企业 Agent</div>
+            <div class="brand-sub">政策申报协同平台</div>
+          </div>
+        </div>
+        <nav class="side-nav" id="side-nav"></nav>
+        <div class="side-user">
+          <div class="avatar" id="side-avatar">顾</div>
+          <div>
+            <div class="side-user-name" id="side-user-name">顾晓岚</div>
+            <div class="side-user-role" id="side-user-role">申报顾问</div>
+          </div>
+          <button class="icon-btn" id="logout-btn" title="退出登录" aria-label="退出登录"></button>
+        </div>
+      </aside>
+
+      <div class="main">
+        <header class="topbar">
+          <button class="icon-btn menu-btn" id="menu-btn" title="菜单" aria-label="菜单"></button>
+          <div class="crumb" id="crumb">工作台</div>
+          <div class="top-search">
+            <input id="global-search" type="text" placeholder="搜索功能、企业、政策、文档…">
+            <button class="btn btn-ghost btn-sm" id="search-btn">搜索</button>
+          </div>
+          <div class="top-actions">
+            <button class="icon-btn" id="notify-btn" title="通知" aria-label="通知">
+              <span class="notify-dot"></span>
+            </button>
+            <div class="top-user">
+              <div class="avatar" id="top-avatar">顾</div>
+              <div>
+                <div class="top-user-name" id="top-user-name">顾晓岚</div>
+                <div class="top-user-role" id="top-user-role">申报顾问</div>
+              </div>
+            </div>
+          </div>
+          <div class="dropdown hidden" id="notify-dropdown">
+            <div class="dropdown-head">待办与提醒</div>
+            <div class="dropdown-list" id="notify-list"></div>
+          </div>
+        </header>
+        <main class="view" id="view"></main>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="drawer-root"></div>
+  <div id="toast-root"></div>
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
