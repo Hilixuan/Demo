@@ -10,6 +10,7 @@
     route: "home",
     evalCompany: "C01",
     qaCites: [],
+    qaConv: "c1",
     kbProject: "proj-tech",
     kbLib: null,
     kbFolder: null,
@@ -19,6 +20,17 @@
     newsFav: new Set(GQ.news.filter(n => n.fav).map(n => n.id)),
     alertsDone: new Set(),
     docRefined: false,
+    materialConfirmed: false,
+    qcChecked: false,
+    qcApproved: false,
+    qcIssueState: {},
+    expandedNav: new Set(),
+    docVersions: [],
+    evalHistory: [
+      { id: 1, companyId: "C01", company: "苏州智造精密装备有限公司", policy: "2026年工业领域设备更新和技术改造", score: 92, level: "建议申报", time: "2026-08-01 14:22", approved: true, approvedBy: "顾晓岚", approvedAt: "2026-08-01 15:30" },
+      { id: 2, companyId: "C02", company: "常州锂航新能源科技有限公司", policy: "两新专项（大规模设备更新与消费品以旧换新）", score: 88, level: "建议申报", time: "2026-08-01 13:05", approved: false },
+      { id: 3, companyId: "C04", company: "杭州启源生物科技有限公司", policy: "XX市制造业高质量发展专项资金", score: 81, level: "需补充材料", time: "2026-07-31 16:12", approved: false }
+    ],
     pptActive: 0,
     defenseCurrent: null,
     accounts: GQ.accounts.slice(),
@@ -54,6 +66,7 @@
     briefcase: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
     database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>',
     star: '<path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/>',
+    paperclip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
     edit: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/>',
     trash: '<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>',
     external: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14 21 3"/>',
@@ -156,12 +169,13 @@
     for (const group of GQ.nav) {
       const hasKids = group.children && group.children.length;
       const activeParent = hasKids ? group.children.some(c => c.route === route) : group.route === route;
-      const open = activeParent ? " open" : "";
+      const open = (activeParent || state.expandedNav.has(group.id)) ? " open" : "";
       html += '<div class="nav-group">';
       if (hasKids) {
         html += '<button class="nav-item' + (activeParent ? " active" : "") + '" data-nav="' + group.id + '">' + icon(group.icon) + "<span>" + group.title + "</span>" + icon("chevron", "nav-chevron" + open) + "</button>";
         html += '<div class="nav-sub' + open + '" id="nav-sub-' + group.id + '">';
         for (const c of group.children) {
+          if (c.hidden) continue;
           html += '<button class="nav-sub-item' + (c.route === route ? " active" : "") + '" data-route="' + c.route + '">' + esc(c.title) + "</button>";
         }
         html += "</div>";
@@ -329,22 +343,26 @@
   }
 
   function viewQA() {
+    const convs = GQ.qaChats.map(c =>
+      '<button class="qa-conv' + (state.qaConv === c.id ? " active" : "") + '" data-action="qa-conv" data-id="' + c.id + '">' +
+      '<div class="qa-conv-ico">' + icon("chat") + '</div><div class="qa-conv-meta"><b>' + esc(c.title) + '</b><span>' + esc(c.project) + " · " + esc(c.time) + " · " + c.msgs + " 条</span></div></button>").join("");
     const suggests = GQ.qaSuggestions.map(s => '<button class="suggest-chip" data-action="qa-suggest" data-q="' + esc(s) + '">' + esc(s) + "</button>").join("");
-    return pageHead("智能问答", "自然语言检索本地知识库，返回带引用的答案；本地知识不足时提示外部数据补充，并区分本地依据与外部依据。") +
-      '<div class="grid-1-2"><div class="card"><div class="card-head"><div><div class="card-title">智库对话</div><div class="card-sub">权限校验 → 本地检索 → 引用回答 → 建议动作</div></div><span class="chip chip-blue">智库 Agent</span></div>' +
-      '<div class="chat-box" id="qa-chat">' +
-      '<div class="msg agent"><div class="msg-avatar">智</div><div class="msg-body">你好，我是智库 Agent。我已接入政策库、项目库、企业资料库、历史案例与内部经验，当前项目空间为「技术改造专项」。你可以直接提问，或点击下方示例问题。</div></div>' +
+    return pageHead("AI智库", "类智能体对话界面：左侧按项目展示对话记录并可发起新对话，右侧进行知识问答，回答带引用来源并区分本地/外部依据。") +
+      '<div class="qa-layout"><div class="card qa-side">' +
+      '<div class="card-head"><div><div class="card-title">对话记录</div><div class="card-sub">按项目分区管理</div></div></div>' +
+      '<button class="btn btn-primary btn-block" style="margin-bottom:12px" data-action="qa-new">' + icon("plus") + "发起新对话</button>" +
+      '<div class="qa-conv-list">' + convs + "</div></div>" +
+      '<div class="card qa-main"><div class="card-head">' +
+      '<div style="display:flex;align-items:center;gap:12px"><div class="ai-writer-logo">' + icon("spark") + '</div><div><div class="card-title">AI智库 · 智库对话</div><div class="card-sub">权限校验 → 本地检索 → 引用回答 → 建议动作</div></div></div>' +
+      '<span class="chip chip-blue">当前项目：技术改造专项</span></div>' +
+      '<div class="qa-scope-row"><span class="qa-scope-label">知识范围</span>' +
+      ["政策库", "企业资料", "外部资料", "历史沉淀", "私有库"].map(s => '<label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" checked> ' + s + "</label>").join("") + "</div>" +
+      '<div class="chat-box" id="qa-chat" style="max-height:440px">' +
+      '<div class="msg agent"><div class="msg-avatar">智</div><div class="msg-body">你好，我是 AI智库。已接入政策库、企业资料库、历史案例与内部经验。点击左侧对话记录切换项目对话，或发起新对话后直接提问。</div></div>' +
       "</div>" +
       '<div class="chat-suggests">' + suggests + "</div>" +
-      '<div class="chat-input"><textarea class="input" id="qa-input" rows="2" placeholder="输入你的问题，例如：XX市技改专项对设备投资额有什么要求？"></textarea>' +
-      '<button class="btn btn-primary" data-action="qa-ask">' + icon("send") + "提问</button></div></div>" +
-      '<div class="card"><div class="card-head"><div><div class="card-title">知识范围与引用</div><div class="card-sub">回答可追溯至文件、章节与页码</div></div></div>' +
-      '<div class="qa-block"><div class="qa-block-title">知识范围</div><div class="form-grid" style="gap:8px">' +
-      ["政策库", "项目库", "企业资料", "历史案例", "内部经验"].map(s => '<label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" checked> ' + s + "</label>").join("") +
-      "</div></div>" +
-      '<div class="qa-block"><div class="qa-block-title">项目空间</div><select class="select"><option>技术改造专项（默认）</option><option>两新专项</option><option>生物医药专项</option></select></div>' +
-      '<div class="qa-block"><div class="qa-block-title">引用来源</div><div id="qa-cites"><div class="qa-text" style="color:#94a3b8">提问后显示引用文件与原文位置</div></div></div>' +
-      '<div class="qa-block"><div class="qa-block-title">相关材料</div><div class="qa-text" style="color:#94a3b8">根据检索结果推荐相关文件</div></div></div></div>';
+      '<div class="chat-input"><textarea class="input" id="qa-input" rows="3" placeholder="输入你的问题，例如：XX市技改专项对设备投资额有什么要求？"></textarea>' +
+      '<button class="btn btn-primary" data-action="qa-ask">' + icon("send") + "提问</button></div></div></div>";
   }
 
   function askQA(question) {
@@ -380,7 +398,8 @@
           '<button class="btn btn-outline btn-sm" data-route="#/report">' + icon("file") + "生成报告</button>" +
           '<button class="btn btn-outline btn-sm" data-action="qa-save">' + icon("briefcase") + "保存到公文包</button>" +
           '<button class="btn btn-outline btn-sm" data-action="cite-source">' + icon("eye") + "查看原文</button></div></div></div>");
-        $("#qa-cites").innerHTML = a.localCites.map(c => '<div class="qa-text" style="margin-bottom:8px"><b>' + esc(c.file) + '</b><br><span style="color:#64748b">' + esc(c.pos) + " · " + esc(c.level) + "</span></div>").join("") +
+        const citesEl = $("#qa-cites");
+        if (citesEl) citesEl.innerHTML = a.localCites.map(c => '<div class="qa-text" style="margin-bottom:8px"><b>' + esc(c.file) + '</b><br><span style="color:#64748b">' + esc(c.pos) + " · " + esc(c.level) + "</span></div>").join("") +
           a.externalCites.map(c => '<div class="qa-text" style="margin-bottom:8px"><b>' + esc(c.file) + '</b><br><span style="color:#64748b">外部公开来源</span></div>').join("");
         chat.scrollTop = chat.scrollHeight;
       }
@@ -551,9 +570,8 @@
       '<span class="link" data-action="company-eval" data-id="' + c.id + '">评估</span> · ' +
       '<span class="link" data-action="company-follow" data-id="' + c.id + '">' + (c.follow ? "已跟进" : "转跟进") + "</span></td></tr>").join("");
     const high = GQ.companies.filter(c => c.score >= 85).length;
-    return pageHead("企业筛选", "导入《企业备案项目》并补全企业画像，按区域、行业、投资额与政策方向测算匹配度，输出候选清单。",
-      '<button class="btn btn-primary" data-action="company-import">' + icon("upload") + "导入企业备案清单</button>" +
-      '<button class="btn btn-outline" data-action="company-export">' + icon("download") + "导出候选清单</button>") +
+    return pageHead("企业筛选", "补全企业画像，按区域、行业、投资额与政策方向测算匹配度，输出候选清单。") +
+      '<div class="notice-banner">' + icon("database") + '<span>企业项目备案清单：默认选中知识库的《企业项目备案清单》数据全局统一，使用人可修改，修改后其他人可见。</span></div>' +
       '<div class="grid-3 section">' +
       '<div class="kpi"><div class="kpi-ico">' + icon("users") + '</div><div class="kpi-meta"><div class="kpi-label">候选企业</div><div class="kpi-value">' + GQ.companies.length + "</div></div></div>" +
       '<div class="kpi"><div class="kpi-ico">' + icon("target") + '</div><div class="kpi-meta"><div class="kpi-label">高匹配（≥85）</div><div class="kpi-value">' + high + "</div></div></div>" +
@@ -609,15 +627,18 @@
 
   function viewEvaluate() {
     return pageHead("项目评估", "自动生成企业项目评估报告：政策条件逐项匹配、申报建议、材料缺口与风险提示，每项判断标注依据与置信度。",
+      '<button class="btn btn-outline" data-action="eval-history">' + icon("clock") + "评估记录</button>" +
       '<button class="btn btn-outline" data-action="eval-export">' + icon("download") + "导出评估报告</button>") +
-      '<div class="grid-1-2"><div class="card"><div class="card-head"><div><div class="card-title">评估设置</div><div class="card-sub">选择企业与目标政策</div></div></div>' +
-      '<div class="qa-block"><div class="qa-block-title">企业</div><select class="select" id="eval-company">' +
+      '<div class="grid-1-2"><div class="card"><div class="card-head"><div><div class="card-title">评估企业信息</div><div class="card-sub">填写评估信息与评估侧重点</div></div></div>' +
+      '<div class="qa-block"><div class="qa-block-title">企业名称</div><select class="select" id="eval-company">' +
       GQ.companies.map(c => '<option value="' + c.id + '">' + esc(c.name) + "</option>").join("") + "</select></div>" +
-      '<div class="qa-block"><div class="qa-block-title">目标政策</div><select class="select" id="eval-policy">' +
+      '<div class="qa-block"><div class="qa-block-title">目标政策 · 从政策库选择</div><select class="select" id="eval-policy">' +
       GQ.policies.map(p => '<option>' + esc(p.name) + "</option>").join("") + "</select></div>" +
-      '<div class="qa-block"><div class="qa-block-title">评估范围</div><label style="display:flex;gap:6px;font-size:13px"><input type="checkbox" checked> 政策条件逐项匹配</label>' +
-      '<label style="display:flex;gap:6px;font-size:13px"><input type="checkbox" checked> 材料缺口分析</label>' +
-      '<label style="display:flex;gap:6px;font-size:13px"><input type="checkbox" checked> 历史案例对比</label></div>' +
+      '<div class="qa-block"><div class="doc-field-head"><div class="qa-block-title">企业材料（非必填）</div>' +
+      '<div class="seg"><button class="seg-btn active" data-action="doc-source" data-target="eval-mat-kb">从知识库选择</button><button class="seg-btn" data-action="doc-source" data-target="eval-mat-local">从本地上传</button></div></div>' +
+      '<div id="eval-mat-kb"><select class="select"><option>企业资料包（默认知识库）</option><option>备案项目与投资凭证</option><option>财务与资质资料</option></select></div>' +
+      '<div id="eval-mat-local" class="hidden"><div class="empty" style="padding:12px">' + icon("upload") + '<span style="font-size:13px">点击上传企业材料（本地）</span></div></div></div>' +
+      '<div class="qa-block"><div class="qa-block-title">评估维度（侧重点）</div><textarea class="input" id="eval-focus" rows="3" placeholder="填写评估的侧重点，例如：重点评估设备购置合规性、财务指标、政策契合度…"></textarea></div>' +
       '<button class="btn btn-primary btn-block" data-action="eval-run">' + icon("spark") + "生成评估报告</button></div>" +
       '<div class="card"><div class="card-head"><div><div class="card-title">评估结果</div><div class="card-sub">申报评估 Agent · 评估口径统一</div></div></div><div id="eval-result">' +
       '<div class="empty">' + icon("clipboard") + "<div>选择企业与政策后生成评估报告<br>低置信结论将标记人工确认</div></div></div></div></div>";
@@ -629,7 +650,13 @@
     state.evalCompany = sel ? sel.value : "C01";
     const c = GQ.companies.find(x => x.id === state.evalCompany);
     const r = GQ.evalReport;
-    runFlow(box, ["权限校验通过", "抽取政策条件与评分项", "读取企业业务、资质与项目资料", "逐项比对并生成报告"], 
+    let rec = state.evalHistory.find(x => x.companyId === c.id);
+    if (rec) {
+      rec.policy = r.policy; rec.score = r.score; rec.level = r.level; rec.time = "2026-08-02 15:35";
+    } else {
+      state.evalHistory.unshift({ id: Date.now(), companyId: c.id, company: c.name, policy: r.policy, score: r.score, level: r.level, time: "2026-08-02 15:35", approved: false });
+    }
+    const resultHtml =
       '<div style="display:flex;gap:20px;align-items:center;margin-bottom:16px">' + ring(r.score) +
       '<div><div class="card-title">' + esc(c.name) + '</div><div class="card-sub">' + esc(r.policy) + " · " + st(r.level) + "</div>" +
       '<div style="margin-top:8px">' + st("依据来源") + st("低置信人工确认") + "</div></div></div>" +
@@ -641,7 +668,39 @@
       '<div class="qa-block"><div class="qa-block-title">风险提示</div>' + r.risks.map(x => '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">' + st(x.level + "风险") + "<span>" + esc(x.text) + "</span></div>").join("") + "</div>" +
       '<div class="page-actions"><button class="btn btn-primary" data-action="eval-confirm">' + icon("check") + "人工确认立项</button>" +
       '<button class="btn btn-outline" data-action="eval-interview">' + icon("chat") + "发起访谈准备</button>" +
-      '<button class="btn btn-outline" data-action="eval-export">' + icon("download") + "导出报告</button></div>");
+      '<button class="btn btn-outline" data-action="eval-export">' + icon("download") + "导出报告</button></div>";
+    const reportHtml =
+      '<div class="doc-preview"><h3>' + esc(c.name) + " · 项目评估分析报告</h3>" +
+      '<p><b>一、评估结论</b>：' + esc(r.level) + "，综合评分 " + r.score + " 分。<span class=\"cite\">[依据：政策条件逐项匹配结果]</span></p>" +
+      '<p><b>二、政策契合分析</b>：项目投资与设备购置占比满足专项门槛，属于政策鼓励方向。<span class="cite">[依据：2026年工业领域设备更新实施方案 P12]</span></p>' +
+      '<p><b>三、风险与缺口</b>：审计报告与开工证明待补充，环评批复需核实。<span class="cite">[依据：材料比对 QC-20260801-03]</span></p>' +
+      '<p><b>四、建议</b>：补齐材料后建议申报，立项决策由人工确认。</p></div>';
+    runEvalAnalysis(box,
+      '<div class="tabs" style="margin-bottom:14px"><button class="tab active" data-action="eval-tab" data-mode="result">评估结果</button><button class="tab" data-action="eval-tab" data-mode="report">分析报告</button></div>' +
+      '<div id="eval-result-view">' + resultHtml + "</div>" +
+      '<div id="eval-report-view" class="hidden">' + reportHtml + "</div>");
+  }
+
+  function runEvalAnalysis(box, doneHtml) {
+    const steps = ["正在分析企业资料", "正在搜索企业经营信息", "正在分析政策匹配度", "正在比对政策条件与评分项", "正在生成评估报告"];
+    box.innerHTML =
+      '<div class="eval-anim"><div class="eval-radar"><div class="eval-ring r1"></div><div class="eval-ring r2"></div><div class="eval-core">' + icon("target") + '</div></div>' +
+      '<div class="eval-step" id="eval-step">' + steps[0] + "</div>" +
+      '<div class="eval-progress"><i id="eval-progress-bar"></i></div>' +
+      '<div class="eval-dims">' + ["企业资料", "经营信息", "政策匹配", "条件比对"].map((d, i) => '<span class="eval-dim" id="eval-dim-' + i + '">' + d + "</span>").join("") + "</div></div>";
+    let i = 0;
+    const tick = setInterval(() => {
+      i += 1;
+      const stepEl = $("#eval-step");
+      if (i < steps.length && stepEl) stepEl.textContent = steps[i];
+      const bar = $("#eval-progress-bar");
+      if (bar) bar.style.width = Math.min(100, Math.round((i / steps.length) * 100)) + "%";
+      $$(".eval-dim").forEach((d, idx) => d.classList.toggle("done", idx < i));
+      if (i >= steps.length) {
+        clearInterval(tick);
+        box.innerHTML = doneHtml;
+      }
+    }, 620);
   }
 
   function viewInterview() {
@@ -680,17 +739,19 @@
     const stats = { "已具备": 3, "缺失": 2, "疑似不合规": 1, "疑似过期": 1, "需人工确认": 1 };
     const rows = GQ.materials.map(m =>
       "<tr><td><b>" + esc(m.name) + "</b></td><td>" + esc(m.format) + "</td><td>" + (m.required === "是" ? st("必填") : "选填") + "</td><td>" + esc(m.valid) + "</td>" +
-      "<td>" + (m.provided === "—" ? '<span style="color:#94a3b8">未提供</span>' : esc(m.provided)) + "</td><td>" + st(m.status) + "</td><td>" + esc(m.note) + "</td>" +
+      "<td>" + (m.provided === "—" ? '<span style="color:#94a3b8">未提供</span>' : esc(m.provided)) + "</td><td>" + st(m.status) + "</td><td>" + esc(m.basis) + "</td><td>" + esc(m.note) + "</td>" +
       '<td class="link" data-action="material-view" data-name="' + esc(m.name) + '">查看</td></tr>').join("");
-    return pageHead("材料管理", "解析材料需求文件并与企业资料自动比对，标记缺失、不合规、疑似过期和需补充说明项。",
+    return pageHead("材料管理", "解析材料需求文件并与企业资料自动比对，输出带判定依据的状态；材料确认齐备后可流转文书制作。",
       '<button class="btn btn-primary" data-action="material-upload">' + icon("upload") + "上传材料需求文件</button>" +
       '<button class="btn btn-outline" data-action="material-scan">' + icon("folder") + "扫描企业文件夹</button>" +
-      '<button class="btn btn-outline" data-action="material-list">' + icon("clipboard") + "生成补充清单</button>") +
+      '<button class="btn btn-outline" data-action="material-list">' + icon("clipboard") + "生成补充清单</button>" +
+      '<button class="btn btn-outline" data-action="material-confirm">' + icon("check") + "确认材料包可用</button>" +
+      '<button class="btn btn-primary" data-action="material-to-doc">' + icon("file") + "进入文书制作</button>") +
       '<div class="grid-3 section">' + Object.keys(stats).map(k =>
         '<div class="kpi"><div class="kpi-ico">' + icon(k === "已具备" ? "check" : "alert") + '</div><div class="kpi-meta"><div class="kpi-label">' + k + '</div><div class="kpi-value">' + stats[k] + "</div></div></div>").join("") + "</div>" +
       '<div class="card"><div class="card-head"><div><div class="card-title">资料比对结果</div><div class="card-sub">苏州智造精密装备有限公司 · 2026年工业领域设备更新和技术改造</div></div>' +
-      '<span class="chip chip-blue">自动比对完成</span></div>' +
-      '<div class="table-wrap"><table class="table"><thead><tr><th>材料名称</th><th>需求格式</th><th>必填</th><th>有效期</th><th>企业已提供</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody>' + rows + "</tbody></table></div></div>";
+      (state.materialConfirmed ? st("可用于文书制作") : '<span class="chip chip-blue">材料包待确认</span>') + "</div>" +
+      '<div class="table-wrap"><table class="table"><thead><tr><th>材料名称</th><th>需求格式</th><th>必填</th><th>有效期</th><th>企业已提供</th><th>状态</th><th>判定依据</th><th>说明</th><th>操作</th></tr></thead><tbody>' + rows + "</tbody></table></div></div>";
   }
 
   function materialListModal() {
@@ -704,46 +765,134 @@
       '<button class="btn btn-outline" data-close="modal">关闭</button><button class="btn btn-primary" data-action="material-export">导出清单</button>');
   }
 
-  function viewDoc() {
-    return pageHead("文书制作", "围绕“两新”等专项政策，基于企业资料与模板生成申报文书初稿，支持对话微调、AI 预评审与版本留存。",
-      '<button class="btn btn-outline" data-action="doc-version">' + icon("clock") + "版本历史</button>") +
-      '<div class="grid-2"><div class="card"><div class="card-head"><div><div class="card-title">文书生成设置</div><div class="card-sub">选择专项政策、企业资料包与模板</div></div></div>' +
-      '<div class="qa-block"><div class="qa-block-title">专项政策</div><select class="select" id="doc-policy">' +
+  function docSettingsHtml() {
+    return '<div class="qa-block"><div class="doc-field-head"><div class="qa-block-title">专项政策</div>' +
+      '<div class="seg"><button class="seg-btn active" data-action="doc-source" data-target="doc-policy-kb">从知识库选择</button><button class="seg-btn" data-action="doc-source" data-target="doc-policy-local">从本地上传</button></div></div>' +
+      '<div id="doc-policy-kb" style="margin-top:8px"><select class="select" id="doc-policy">' +
       GQ.policies.map(p => '<option>' + esc(p.name) + "</option>").join("") + "</select></div>" +
-      '<div class="qa-block"><div class="qa-block-title">企业资料包</div><select class="select" id="doc-company">' +
+      '<div id="doc-policy-local" class="hidden"><div class="empty" style="padding:12px">' + icon("upload") + '<span style="font-size:13px">点击选择政策文件（本地）</span></div></div></div>' +
+      '<div class="qa-block"><div class="doc-field-head"><div class="qa-block-title">企业资料包</div>' +
+      '<div class="seg"><button class="seg-btn active" data-action="doc-source" data-target="doc-company-kb">从知识库选择</button><button class="seg-btn" data-action="doc-source" data-target="doc-company-local">从本地上传</button></div></div>' +
+      '<div id="doc-company-kb" style="margin-top:8px"><select class="select" id="doc-company">' +
       GQ.companies.map(c => '<option>' + esc(c.name) + "</option>").join("") + "</select></div>" +
-      '<div class="qa-block"><div class="qa-block-title">文书模板</div><select class="select"><option>两新专项申报书标准模板 v3</option><option>技改专项申报书模板 v2</option></select></div>' +
-      '<div class="qa-block"><div class="qa-block-title">参考资料</div><label style="display:flex;gap:6px;font-size:13px"><input type="checkbox" checked> 评分标准</label>' +
-      '<label style="display:flex;gap:6px;font-size:13px"><input type="checkbox" checked> 证明材料清单</label>' +
-      '<label style="display:flex;gap:6px;font-size:13px"><input type="checkbox" checked> 历史样本（脱敏）</label></div>' +
-      '<button class="btn btn-primary btn-block" data-action="doc-run">' + icon("spark") + "生成文书初稿</button></div>" +
-      '<div class="card"><div class="card-head"><div><div class="card-title">文书预览</div><div class="card-sub">申报材料 Agent · 对话微调</div></div></div><div id="doc-result">' +
-      '<div class="empty">' + icon("file") + "<div>生成后展示章节初稿、附件清单与资料缺口标注</div></div></div></div></div>";
+      '<div id="doc-company-local" class="hidden"><div class="empty" style="padding:12px">' + icon("upload") + '<span style="font-size:13px">点击选择企业资料包（本地）</span></div></div></div>' +
+      '<div class="qa-block"><div class="doc-field-head"><div class="qa-block-title">文书模板</div>' +
+      '<div class="seg"><button class="seg-btn active" data-action="doc-source" data-target="doc-template-kb">从知识库选择</button><button class="seg-btn" data-action="doc-source" data-target="doc-template-local">从本地上传</button></div></div>' +
+      '<div id="doc-template-kb" style="margin-top:8px"><select class="select" id="doc-template"><option>两新专项申报书标准模板 v3</option><option>技改专项申报书模板 v2</option></select></div>' +
+      '<div id="doc-template-local" class="hidden"><div class="empty" style="padding:12px">' + icon("upload") + '<span style="font-size:13px">点击选择文书模板（本地）</span></div></div></div>' +
+      '<div class="qa-block"><div class="doc-field-head"><div class="qa-block-title">参考资料</div></div>' +
+      '<label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" checked> <span class="link" data-action="doc-standard">评分标准（点击查看）</span></label></div>';
   }
 
-  function runDoc() {
-    const box = $("#doc-result");
-    runFlow(box, ["解析企业资料与字段映射", "生成章节提纲", "生成章节草稿", "匹配证明附件", "标注资料缺口"], 
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
-      '<div><div class="card-title">' + esc(($("#doc-company") || {}).value || "苏州智造精密装备有限公司") + " · 申报书初稿 v1.0</div>" +
-      '<div class="card-sub">' + esc(($("#doc-policy") || {}).value || "2026年工业领域设备更新和技术改造") + " · 共 6 章 3,740 字</div></div>" +
+  function viewDoc() {
+    return pageHead("文书制作", "围绕“两新”等专项政策生成申报文书初稿：设置资料后以对话方式输入生成要求，资料可从知识库选择或本地上传。",
+      '<button class="btn btn-outline" data-action="doc-version">' + icon("clock") + "版本历史</button>") +
+      '<div class="grid-2"><div class="card"><div class="card-head">' +
+      '<div style="display:flex;align-items:center;gap:12px"><div class="ai-writer-logo">' + icon("file") + "</div><div>" +
+      '<div class="card-title">AI写手 · 文书生成</div><div class="card-sub">申报材料 Agent · 对话式生成</div></div></div></div>' +
+      '<div id="doc-settings">' +
+      (state.materialConfirmed
+        ? '<div class="notice-banner">' + icon("check") + '<span>已引用材料管理确认的材料包（苏州智造资料包），材料齐备度 3/8，缺口 5 项。</span></div>'
+        : '<div class="notice-banner">' + icon("alert") + '<span>材料包尚未确认，建议先在「材料管理」确认材料齐备后生成文书。</span></div>') +
+      docSettingsHtml() + "</div>" +
+      '<div class="doc-chat"><div class="chat-box" id="doc-chat" style="min-height:120px"></div>' +
+      '<div class="doc-composer"><textarea class="input" id="doc-prompt" rows="5" placeholder="输入生成要求，例如：突出技术先进性对比，资金测算与审计口径一致"></textarea>' +
+      '<button class="icon-btn doc-attach-btn" data-action="doc-attach" title="添加文件">' + icon("paperclip") + "</button>" +
+      '<button class="btn btn-primary doc-send-btn" data-action="doc-run" title="开始生成">' + icon("send") + "</button></div></div></div>" +
+      '<div class="card"><div class="card-head"><div><div class="card-title">文书预览</div><div class="card-sub">申报材料 Agent · 按章节 / 全文切换</div></div></div><div id="doc-result">' +
+      '<div class="empty">' + icon("file") + "<div>完成设置后，在对话框输入生成要求并开始生成</div></div></div></div></div>";
+  }
+
+  function docResultHtml(company, policy) {
+    const fullText = GQ.docOutline.map(ch => "<h3>" + esc(ch.title) + "</h3><p>" + esc(ch.content) + "</p>").join("");
+    return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
+      '<div><div class="card-title">' + esc(company) + " · 申报书初稿 v1.0</div>" +
+      '<div class="card-sub">' + esc(policy) + " · 共 6 章 3,740 字</div></div>" +
       st("已标注资料缺口") + "</div>" +
-      '<div id="doc-chapters">' + GQ.docOutline.map(ch =>
+      '<div class="tabs" style="margin-bottom:12px"><button class="tab active" data-action="doc-preview-tab" data-mode="chapter">按章节</button><button class="tab" data-action="doc-preview-tab" data-mode="full">全文</button></div>' +
+      '<div id="doc-chapter-view">' + GQ.docOutline.map(ch =>
         '<div style="border:1px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden"><button class="nav-item" style="width:100%" data-action="doc-chapter" data-id="' + ch.id + '">' +
         '<span style="flex:1;text-align:left">' + esc(ch.title) + " · " + ch.words + " 字</span>" + st(ch.status) + icon("chevron", "nav-chevron") + "</button>" +
         '<div class="doc-preview" style="display:none;border:none;border-top:1px solid var(--border);border-radius:0" id="doc-ch-' + ch.id + '">' + esc(ch.content) + "</div></div>").join("") + "</div>" +
+      '<div id="doc-full-view" class="hidden"><div class="doc-preview">' + fullText + "</div></div>" +
       '<div class="qa-block" style="margin-top:12px"><div class="qa-block-title">资料缺口</div><div>' +
       ["2025 年审计报告", "设备发票清单", "环评批复有效期"].map(g => '<span class="chip" style="background:#fee2e2;color:#ef4444">' + g + "</span>").join(" ") + "</div></div>" +
-      '<div class="chat-input"><input class="input" id="doc-refine-input" placeholder="对话微调，例如：第三章突出技术先进性对比">' +
-      '<button class="btn btn-primary" data-action="doc-refine">' + icon("send") + "微调</button></div>" +
-      '<div class="page-actions" style="margin-top:12px"><button class="btn btn-outline" data-action="doc-export">' + icon("download") + "导出 Word</button>" +
+      '<div class="page-actions" style="margin-top:12px"><button class="btn btn-outline" data-action="doc-save-version">' + icon("clock") + "保留版本</button>" +
+      '<button class="btn btn-outline" data-action="doc-export">' + icon("download") + "导出 Word</button>" +
       '<button class="btn btn-outline" data-action="doc-export">' + icon("download") + "导出 PDF</button>" +
-      '<button class="btn btn-primary" data-action="doc-review">' + icon("spark") + "AI 预评审</button></div>");
+      '<button class="btn btn-primary" data-action="doc-review"><span class="reviewer-logo">' + icon("radar") + '</span>AI评审官</button>' +
+      '<button class="btn btn-outline" data-action="doc-to-qc">' + icon("check") + "转入质量控制</button></div>";
+  }
+
+  function runDoc() {
+    const chat = $("#doc-chat");
+    const box = $("#doc-result");
+    const company = $("#doc-company") ? $("#doc-company").value : "苏州智造精密装备有限公司";
+    const policy = $("#doc-policy") ? $("#doc-policy").value : "2026年工业领域设备更新和技术改造";
+    const template = $("#doc-template") ? $("#doc-template").value : "两新专项申报书标准模板 v3";
+    const prompt = $("#doc-prompt") ? $("#doc-prompt").value.trim() : "";
+    if (chat) {
+      if (prompt) chat.insertAdjacentHTML("beforeend", '<div class="msg user"><div class="msg-avatar">顾</div><div class="msg-body">' + esc(prompt) + "</div></div>");
+      const busy = document.createElement("div");
+      busy.className = "agent-steps";
+      busy.innerHTML = '<span class="spin"></span><span class="flow-text">读取设置项与资料来源…</span>';
+      chat.appendChild(busy);
+      chat.scrollTop = chat.scrollHeight;
+    }
+    const steps = ["读取设置项与资料来源", "解析企业资料与字段映射", "生成章节提纲", "生成章节草稿", "匹配证明附件", "标注资料缺口"];
+    let i = 0;
+    const tick = setInterval(() => {
+      i += 1;
+      if (i < steps.length && chat) {
+        const t = chat.querySelector(".flow-text");
+        if (t) { t.textContent = steps[i]; chat.scrollTop = chat.scrollHeight; }
+      } else {
+        clearInterval(tick);
+        if (chat) { const b = chat.querySelector(".agent-steps"); if (b) b.remove(); }
+        box.innerHTML = docResultHtml(company, policy);
+        const settingsBox = $("#doc-settings");
+        if (settingsBox) settingsBox.classList.add("hidden");
+        if (chat) {
+          chat.innerHTML =
+            '<div class="msg user"><div class="msg-avatar">顾</div><div class="msg-body">' + (prompt ? esc(prompt) : "按默认要求生成文书初稿") + "</div></div>" +
+            '<div class="msg agent"><div class="msg-avatar">写</div><div class="msg-body"><b style="color:#1557b0">文书初稿已生成</b>：共 6 章 3,740 字，已按《评分标准》标注 3 项资料缺口，可在右侧按章节或全文查看。</div></div>' +
+            '<div class="doc-file-summary"><div class="qa-block-title">已选资料</div>' +
+            '<div class="qa-text">专项政策：' + esc(policy) + "<br>企业资料包：" + esc(company) + "<br>文书模板：" + esc(template) + "<br>资料来源：知识库选择（演示）</div></div>";
+          chat.scrollTop = chat.scrollHeight;
+        }
+        const promptEl = $("#doc-prompt");
+        if (promptEl) { promptEl.value = ""; promptEl.placeholder = "输入微调要求，例如：第三章突出技术先进性对比"; }
+        const sendBtn = $(".doc-send-btn");
+        if (sendBtn) sendBtn.dataset.action = "doc-refine";
+        const hint = $(".doc-composer-hint");
+        if (hint) hint.textContent = "微调对话框 · 可继续修改文书内容";
+        if (chat) chat.scrollTop = chat.scrollHeight;
+      }
+    }, 600);
+  }
+
+  function runReviewerEffect() {
+    modal("AI评审官", "正在按《评分标准》对申报文书进行动态打分",
+      '<div class="reviewer-effect"><div class="reviewer-ring"><div class="reviewer-ring-inner"><b id="reviewer-score">0</b><span>综合评分</span></div></div>' +
+      '<div class="reviewer-dims">正在校验政策契合度 / 材料完整性 / 证据支撑度…</div></div>',
+      "");
+    let score = 0;
+    const tick = setInterval(() => {
+      score += Math.max(1, Math.round((88 - score) / 5));
+      const el = $("#reviewer-score");
+      if (el) el.textContent = Math.min(88, score);
+      if (score >= 88) {
+        clearInterval(tick);
+        const box = $(".reviewer-effect");
+        if (box) box.innerHTML = '<div style="display:flex;align-items:center;gap:12px;justify-content:center;padding:22px 0"><div class="kpi-ico">' + icon("check") + '</div><div><div class="modal-title">评审完成</div><div class="modal-sub">综合评分 88 分 · 问题清单已生成</div></div></div>';
+        setTimeout(() => { closeModal(); go("#/review"); }, 900);
+      }
+    }, 140);
   }
 
   function viewReview() {
     const r = GQ.reviewResult;
-    return pageHead("AI预评审", "结合《评分标准》对申报文书进行预评审打分并输出调优建议；结果仅作参考，最终以人工评审为准。",
+    return pageHead("AI评审官", "结合《评分标准》对申报文书进行评审打分并输出调优建议；结果仅作参考，最终以人工评审为准。",
       '<button class="btn btn-outline" data-action="review-export">' + icon("download") + "导出评审单</button>") +
       '<div class="grid-2-1"><div class="card"><div class="card-head"><div><div class="card-title">评审概览</div><div class="card-sub">苏州智造精密装备有限公司 · 申报书 v1.2 · 2026年工业领域设备更新和技术改造</div></div></div>' +
       '<div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">' + ring(r.total) +
@@ -758,17 +907,36 @@
   function viewQC() {
     const q = GQ.qc;
     const diffHtml = q.diff.map(d => '<span class="' + (d.type === "new" ? "diff-new" : "diff-orig") + '">' + esc(d.text) + "</span>").join("");
-    return pageHead("质量控制", "对已制作申报材料执行数据一致性、政策条件覆盖、证据引用、行文逻辑与格式校验，人工授权后生成校订版。",
+    const checks = GQ.qcChecks.map(c => '<div class="qa-block" style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:13px">' + esc(c.name) + "</b>" + st(state.qcChecked ? c.status : "待校验") + "</div></div>").join("");
+    const issues = GQ.reviewResult.issues.map((x, i) => {
+      const s = state.qcIssueState[i];
+      return '<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px">' +
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">' + st(x.level) + '<b style="font-size:13px">' + esc(x.pos) + "</b>" + (s ? st(s === "confirmed" ? "已确认" : "已驳回") : "") + "</div>" +
+        '<div style="font-size:13px">' + esc(x.text) + '</div><div style="font-size:12px;color:#1557b0;margin-top:4px">建议：' + esc(x.suggest) + "</div>" +
+        '<div class="page-actions" style="margin-top:8px"><button class="btn btn-outline btn-sm" data-action="qc-issue" data-idx="' + i + '" data-act="confirmed">确认采纳</button>' +
+        '<button class="btn btn-outline btn-sm" data-action="qc-issue" data-idx="' + i + '" data-act="rejected">驳回</button></div></div>';
+    }).join("");
+    return pageHead("质量控制", "承接文书制作定稿，执行数据一致性、政策条件覆盖、证据引用、行文逻辑与格式五类校验，人工授权后生成校订版。",
       '<button class="btn btn-outline" data-action="qc-authorize">' + icon("edit") + "授权修改</button>" +
-      '<button class="btn btn-primary" data-action="qc-export">' + icon("download") + "导出校订版</button>") +
+      '<button class="btn btn-outline" data-action="qc-export">' + icon("download") + "导出校订版</button>" +
+      '<button class="btn btn-primary" data-action="qc-finish">' + icon("check") + "完成质检</button>" +
+      '<button class="btn btn-outline" data-action="qc-to-ppt">' + icon("ppt") + "进入答辩准备</button>") +
+      '<div class="grid-2 section">' +
+      '<div class="card"><div class="card-head"><div><div class="card-title">质检设置</div><div class="card-sub">默认承接文书制作定稿版本</div></div>' + st(state.qcApproved ? "已质检" : "质检中") + "</div>" +
+      '<div class="qa-block"><div class="qa-block-title">待质检文书</div><select class="select"><option>苏州智造 · 申报书定稿 v1.2（承接文书制作）</option><option>上传外部文书</option></select></div>' +
+      '<div class="qa-block"><div class="qa-block-title">校验范围</div><div class="qa-text">数据一致性 / 政策条件覆盖 / 证据引用 / 行文逻辑 / 格式规范</div></div>' +
+      '<button class="btn btn-primary btn-block" data-action="qc-run">' + icon("spark") + "开始质检</button></div>" +
+      '<div class="card"><div class="card-head"><div><div class="card-title">五类校验</div><div class="card-sub">问题按严重程度分级并定位到章节/表格/附件</div></div></div><div id="qc-checks">' + checks + "</div></div></div>" +
       '<div class="grid-2 section"><div class="card"><div class="card-head"><div><div class="card-title">原文 · 第四章资金筹措</div><div class="card-sub">' + esc(q.batch) + " · 原稿只读</div></div></div>" +
       '<div class="qa-text">' + esc(q.original) + "</div></div>" +
       '<div class="card"><div class="card-head"><div><div class="card-title">校订版 · v1.2</div><div class="card-sub">' + st("已授权修改") + " · 修订留痕</div></div></div>" +
       '<div class="qa-text">' + diffHtml + "</div></div></div>" +
+      '<div class="grid-2 section">' +
+      '<div class="card"><div class="card-head"><div><div class="card-title">问题清单</div><div class="card-sub">逐条确认或驳回修改建议</div></div></div>' + issues + "</div>" +
       '<div class="card"><div class="card-head"><div><div class="card-title">修订记录</div><div class="card-sub">原稿备份、授权记录与复核确认可追溯</div></div></div>' +
       '<div class="table-wrap"><table class="table"><thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>级别</th></tr></thead><tbody>' +
       q.records.map(r => "<tr><td>" + esc(r.time) + "</td><td>" + esc(r.user) + "</td><td>" + esc(r.action) + "</td><td>" + st(r.level) + "</td></tr>").join("") +
-      "</tbody></table></div></div>";
+      "</tbody></table></div></div></div>";
   }
 
   /* ===== 答辩准备 ===== */
@@ -959,7 +1127,7 @@
   function openSearch(q) {
     const pages = [];
     for (const g of GQ.nav) {
-      if (g.children) g.children.forEach(c => pages.push({ title: g.title + " · " + c.title, route: c.route }));
+      if (g.children) g.children.filter(c => !c.hidden).forEach(c => pages.push({ title: g.title + " · " + c.title, route: c.route }));
       else pages.push({ title: g.title, route: g.route });
     }
     const matchedPages = pages.filter(p => !q || p.title.includes(q));
@@ -1033,6 +1201,21 @@
       case "kb-batch": toast("批量导入演示：已选择 12 个文件，开始解析入库", "success"); break;
       case "qa-suggest": askQA(el.dataset.q); break;
       case "qa-ask": askQA(); break;
+      case "qa-new": {
+        state.qaConv = null;
+        const chat = $("#qa-chat");
+        if (chat) chat.innerHTML = '<div class="msg agent"><div class="msg-avatar">智</div><div class="msg-body">已开启新对话，输入问题开始吧。</div></div>';
+        toast("已发起新对话", "success");
+        break;
+      }
+      case "qa-conv": {
+        state.qaConv = el.dataset.id;
+        const c = GQ.qaChats.find(x => x.id === el.dataset.id);
+        const chat = $("#qa-chat");
+        if (chat) chat.innerHTML = '<div class="msg agent"><div class="msg-avatar">智</div><div class="msg-body">已切换到「' + esc(c.title) + '」，项目空间：' + esc(c.project) + "，可继续提问。</div></div>";
+        $$(".qa-conv").forEach(b => b.classList.toggle("active", b.dataset.id === el.dataset.id));
+        break;
+      }
       case "qa-save": toast("已保存到公文包 / 历史记录", "success"); break;
       case "cite-open": {
         const idx = el.dataset.idx;
@@ -1097,11 +1280,59 @@
       case "company-filter": toast("已按筛选条件重新计算匹配评分（演示）", "success"); break;
       case "company-reset": renderView(); break;
       case "eval-run": runEvaluate(); break;
+      case "eval-tab": {
+        const mode = el.dataset.mode;
+        const resultView = $("#eval-result-view");
+        const reportView = $("#eval-report-view");
+        if (!resultView || !reportView) break;
+        const isResult = mode === "result";
+        resultView.classList.toggle("hidden", !isResult);
+        reportView.classList.toggle("hidden", isResult);
+        $$('.tab[data-action="eval-tab"]').forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
+        break;
+      }
+      case "eval-history": {
+        const rows = state.evalHistory.map(h =>
+          "<tr><td><b>" + esc(h.company) + "</b></td><td>" + esc(h.policy) + '</td><td class="num">' + h.score + "</td><td>" + st(h.level) + "</td><td>" + esc(h.time) + "</td>" +
+          "<td>" + (h.approved ? st("已立项") + '<div style="font-size:12px;color:#64748b;margin-top:2px">立项人：' + esc(h.approvedBy) + "<br>立项时间：" + esc(h.approvedAt) + "</div>" : st("未立项")) + "</td>" +
+          '<td style="white-space:nowrap"><span class="link" data-action="eval-history-view" data-id="' + h.id + '">查看报告</span>' +
+          (h.approved ? ' · <span class="link" data-action="eval-history-cancel" data-id="' + h.id + '">取消立项</span>' : "") + "</td></tr>").join("");
+        drawer("评估记录", "所有评估过的企业均保留记录，已立项企业展示立项人与立项时间",
+          '<div class="table-wrap"><table class="table"><thead><tr><th>企业</th><th>目标政策</th><th>评分</th><th>结论</th><th>评估时间</th><th>立项状态</th><th>操作</th></tr></thead><tbody>' + rows + "</tbody></table></div>",
+          '<button class="btn btn-outline" data-close="drawer">关闭</button>');
+        break;
+      }
+      case "eval-history-view": {
+        const h = state.evalHistory.find(x => x.id === +el.dataset.id);
+        if (!h) break;
+        closeDrawer();
+        state.evalCompany = h.companyId;
+        go("#/evaluate");
+        setTimeout(() => { const sel = $("#eval-company"); if (sel) sel.value = h.companyId; runEvaluate(); }, 120);
+        break;
+      }
+      case "eval-history-cancel": {
+        const h = state.evalHistory.find(x => x.id === +el.dataset.id);
+        if (h) { h.approved = false; h.approvedBy = ""; h.approvedAt = ""; toast("已取消立项并写入决策记录", "success"); }
+        closeDrawer();
+        handleAction("eval-history", el);
+        break;
+      }
       case "eval-confirm": modal("人工确认立项", "立项决策由人工完成，Agent 仅提供评估建议",
         '<div class="qa-block"><div class="qa-block-title">评估结论</div><div class="qa-text">建议申报，综合评分 92，存在 2 项待补充材料。</div></div>' +
         '<label class="field" style="margin-top:12px"><span>确认意见</span><textarea class="input" rows="3" placeholder="填写立项确认意见…"></textarea></label>',
         '<button class="btn btn-outline" data-close="modal">取消</button><button class="btn btn-primary" data-action="eval-confirm-ok">确认立项</button>'); break;
-      case "eval-confirm-ok": closeModal(); toast("已确认立项并写入决策记录", "success"); break;
+      case "eval-confirm-ok": {
+        closeModal();
+        const c = GQ.companies.find(x => x.id === state.evalCompany);
+        const now = "2026-08-02 15:40";
+        const who = (state.user || {}).name || "顾晓岚";
+        let rec = state.evalHistory.find(x => x.companyId === state.evalCompany);
+        if (rec) { rec.approved = true; rec.approvedBy = who; rec.approvedAt = now; }
+        else if (c) { state.evalHistory.unshift({ id: Date.now(), companyId: c.id, company: c.name, policy: GQ.evalReport.policy, score: GQ.evalReport.score, level: GQ.evalReport.level, time: now, approved: true, approvedBy: who, approvedAt: now }); }
+        toast("已确认立项并写入决策记录，立项人：" + who, "success");
+        break;
+      }
       case "eval-interview": go("#/interview"); break;
       case "eval-export": toast("评估报告已导出（演示）", "success"); break;
       case "interview-run": runInterview(); break;
@@ -1127,10 +1358,30 @@
       case "material-list": materialListModal(); break;
       case "material-export": toast("材料补充清单已导出（演示）", "success"); break;
       case "material-copy": toast("催收文案已复制到剪贴板（演示）", "success"); break;
+      case "material-confirm": state.materialConfirmed = true; toast("材料包已标记「可用于文书制作」", "success"); renderView(); break;
+      case "material-to-doc": go("#/doc"); break;
       case "material-view": drawer("文件详情", el.dataset.name,
         '<div class="qa-block"><div class="qa-block-title">文件</div><div class="qa-text">' + esc(el.dataset.name) + "</div></div>" +
         '<div class="qa-block"><div class="qa-block-title">权限</div><div class="qa-text">仅项目成员可见 · 证照类文件脱敏预览</div></div>',
         '<button class="btn btn-outline" data-close="drawer">关闭</button>'); break;
+      case "doc-settings-toggle": {
+        const body = $("#doc-settings");
+        if (!body) break;
+        body.classList.toggle("hidden");
+        const label = $("#doc-settings-label");
+        if (label) label.textContent = body.classList.contains("hidden") ? "展开设置" : "收起设置";
+        break;
+      }
+      case "doc-source": {
+        const target = el.dataset.target;
+        const group = target.replace(/-(kb|local)$/, "");
+        $$('.seg-btn[data-target^="' + group + '"]').forEach(b => b.classList.toggle("active", b.dataset.target === target));
+        const kb = $("#" + group + "-kb");
+        const local = $("#" + group + "-local");
+        if (kb) kb.classList.toggle("hidden", target !== group + "-kb");
+        if (local) local.classList.toggle("hidden", target !== group + "-local");
+        break;
+      }
       case "doc-run": runDoc(); break;
       case "doc-chapter": {
         const ch = $("#doc-ch-" + el.dataset.id);
@@ -1138,20 +1389,71 @@
         break;
       }
       case "doc-refine": {
-        const input = $("#doc-refine-input");
+        const input = $("#doc-refine-input") || $("#doc-prompt");
         const v = input ? input.value.trim() : "";
         const ch3 = $("#doc-ch-3");
         if (ch3) ch3.innerHTML = esc(ch3.textContent.trim() + "（已按对话要求调整：突出技术先进性对比与国产替代价值。" + (v ? " 调整要点：" + v : "") + "）");
-        input.value = "";
+        const chat = $("#doc-chat");
+        if (chat && v) chat.insertAdjacentHTML("beforeend", '<div class="msg user"><div class="msg-avatar">顾</div><div class="msg-body">' + esc(v) + "</div></div>" + '<div class="msg agent"><div class="msg-avatar">写</div><div class="msg-body">已按微调要求更新第三章内容。</div></div>');
+        if (input) input.value = "";
         toast("已按微调要求更新第三章内容", "success");
         break;
       }
-      case "doc-export": toast("申报文书已导出（演示）", "success"); break;
-      case "doc-version": modal("版本历史", "文书版本、评分结果与调优记录可追溯",
-        GQ.docOutline.slice(0, 3).map((ch, i) => '<div class="setting-row"><div><b>v1.' + i + ' · ' + esc(ch.title) + '</b><span>2026-08-0' + (i + 1) + " · 对话微调</span></div>" + st("已留存") + "</div>").join(""),
+      case "doc-standard": modal("评分标准", "两新专项申报文书评审评分标准",
+        '<div class="qa-text" style="margin-bottom:8px"><b>一、政策契合度（20%）</b><br>申报方向与专项政策支持范围一致，指标明确。</div>' +
+        '<div class="qa-text" style="margin-bottom:8px"><b>二、材料完整性（20%）</b><br>必备材料齐备、格式正确、有效期符合要求。</div>' +
+        '<div class="qa-text" style="margin-bottom:8px"><b>三、证据支撑度（25%）</b><br>关键结论有合同、发票、检测报告等依据。</div>' +
+        '<div class="qa-text" style="margin-bottom:8px"><b>四、行文逻辑（20%）</b><br>章节衔接清晰，口径一致。</div>' +
+        '<div class="qa-text"><b>五、格式规范（15%）</b><br>符合模板版式与排版要求。</div>',
         '<button class="btn btn-outline" data-close="modal">关闭</button>'); break;
-      case "doc-review": go("#/review"); break;
+      case "doc-attach": toast("已添加本地文件作为参考（演示）", "success"); break;
+      case "doc-preview-tab": {
+        const mode = el.dataset.mode;
+        const chapterView = $("#doc-chapter-view");
+        const fullView = $("#doc-full-view");
+        if (!chapterView || !fullView) break;
+        const isChapter = mode === "chapter";
+        chapterView.classList.toggle("hidden", !isChapter);
+        fullView.classList.toggle("hidden", isChapter);
+        $$('.tab[data-action="doc-preview-tab"]').forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
+        break;
+      }
+      case "doc-export": toast("申报文书已导出（演示）", "success"); break;
+      case "doc-to-qc": go("#/qc"); break;
+      case "doc-version": {
+        const list = state.docVersions.length ? state.docVersions.map(v =>
+          '<div class="setting-row"><div><b>' + esc(v.label) + '</b><span>' + esc(v.time) + " · " + esc(v.note) + "</span></div>" + st("已留存") + "</div>").join("")
+          : '<div class="empty">' + icon("clock") + "<div>尚未保留版本<br>点击「保留版本」后加入版本历史</div></div>";
+        modal("版本历史", "未点击「保留版本」的文书不会进入版本历史，可持续调优",
+          list,
+          '<button class="btn btn-outline" data-close="modal">关闭</button>');
+        break;
+      }
+      case "doc-save-version": {
+        const v = state.docVersions.length + 1;
+        state.docVersions.push({ label: "v1." + v, time: "2026-08-02 15:30", note: "文书版本已保留，可继续调优" });
+        toast("版本 v1." + v + " 已保留并加入版本历史", "success");
+        break;
+      }
+      case "doc-review": runReviewerEffect(); break;
       case "review-export": toast("评审单已导出（演示）", "success"); break;
+      case "qc-run": {
+        const box = $("#qc-checks");
+        if (!box) break;
+        runFlow(box, ["解析文书章节与指标", "数据一致性比对", "政策条件覆盖校验", "证据引用核验", "行文逻辑与格式校验"], '<div class="qa-text" style="color:#64748b">校验完成，请在问题清单中逐条确认或驳回。</div>');
+        state.qcChecked = true;
+        setTimeout(() => renderView(), 3400);
+        break;
+      }
+      case "qc-issue": {
+        const idx = el.dataset.idx;
+        state.qcIssueState[idx] = el.dataset.act;
+        toast(el.dataset.act === "confirmed" ? "已确认采纳该修改建议" : "已驳回该修改建议", "success");
+        renderView();
+        break;
+      }
+      case "qc-finish": state.qcApproved = true; toast("质检完成，文书状态已更新为「已质检」", "success"); renderView(); break;
+      case "qc-to-ppt": go("#/ppt"); break;
       case "qc-authorize": closeDrawer(); toast("已授权修改，生成校订版 v1.2（演示）", "success"); break;
       case "qc-export": toast("校订版已导出并留痕（演示）", "success"); break;
       case "ppt-select": state.pptActive = +el.dataset.id; $("#ppt-preview").innerHTML = pptPreviewHtml(); $$(".slide-card").forEach(c => c.classList.toggle("active", +c.dataset.id === state.pptActive)); break;
@@ -1237,6 +1539,8 @@
       const routeEl = e.target.closest("[data-route]");
       if (routeEl) {
         go(routeEl.dataset.route);
+        const found = findPage(routeEl.dataset.route);
+        if (found && found.parent) state.expandedNav.add(found.parent.id);
         closeModal();
         closeDrawer();
         $("#notify-dropdown").classList.add("hidden");
@@ -1246,7 +1550,10 @@
       if (navEl) {
         const id = navEl.dataset.nav;
         const sub = $("#nav-sub-" + id);
-        if (sub) sub.classList.toggle("open");
+        if (sub) {
+          sub.classList.toggle("open");
+          sub.classList.contains("open") ? state.expandedNav.add(id) : state.expandedNav.delete(id);
+        }
         const ch = navEl.querySelector(".nav-chevron");
         if (ch) ch.classList.toggle("open");
         $("#sidebar").classList.remove("open");

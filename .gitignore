@@ -1,4 +1,5 @@
 # Codex 临时脚本（不入库）
 dump_devlist.py
 update_devlist.py
+update_guoqing_req.py
 check_demo.js

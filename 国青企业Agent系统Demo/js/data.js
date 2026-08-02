@@ -11,10 +11,10 @@ GQ.nav = [
   {
     id: "m01", title: "万智中枢", icon: "book", route: "#/kb",
     children: [
+      { id: "qa", title: "AI智库", route: "#/qa" },
       { id: "kb", title: "知识库管理", route: "#/kb" },
-      { id: "qa", title: "智能问答", route: "#/qa" },
-      { id: "report", title: "报告生成", route: "#/report" },
-      { id: "trace", title: "来源追溯", route: "#/trace" }
+      { id: "report", title: "报告生成", route: "#/report", hidden: true },
+      { id: "trace", title: "来源追溯", route: "#/trace", hidden: true }
     ]
   },
   {
@@ -39,7 +39,7 @@ GQ.nav = [
     children: [
       { id: "materials", title: "材料管理", route: "#/materials" },
       { id: "doc", title: "文书制作", route: "#/doc" },
-      { id: "review", title: "AI预评审", route: "#/review" },
+      { id: "review", title: "AI评审官", route: "#/review" },
       { id: "qc", title: "质量控制", route: "#/qc" }
     ]
   },
@@ -186,6 +186,13 @@ GQ.qaSuggestions = [
   "近三年同类项目申报通过率如何？"
 ];
 
+GQ.qaChats = [
+  { id: "c1", title: "技术改造专项 · 设备更新问答", project: "技术改造专项", time: "今天 14:22", msgs: 6 },
+  { id: "c2", title: "两新专项 · 材料口径确认", project: "两新专项", time: "今天 10:05", msgs: 4 },
+  { id: "c3", title: "生物医药 · 创新器械审查", project: "生物医药专项", time: "昨天 17:12", msgs: 8 },
+  { id: "c4", title: "常州锂航 · 申报可行性", project: "技术改造专项", time: "07-31 16:40", msgs: 5 }
+];
+
 GQ.qaAnswer = {
   text: "根据本地政策库与历史案例，XX市技术改造专项的主要条件包括：1）项目固定资产投资不低于 500 万元，其中设备购置投资占比不低于 60%；2）企业须为独立法人且正常经营满 2 年；3）项目已完成备案并在建设期内。苏州智造精密装备有限公司当前备案项目投资 8,600 万元，设备购置 6,200 万元，占比 72%，符合投资额与设备占比要求；但项目开工日期为 2026-03-12，需在申报截止前完成投资凭证归集。",
   localCites: [
@@ -311,14 +318,22 @@ GQ.interview = {
 };
 
 GQ.materials = [
-  { name: "企业营业执照", format: "PDF/JPG", required: "是", valid: "有效期内", provided: "营业执照2026.pdf", status: "已具备", note: "原件扫描清晰" },
-  { name: "项目备案证", format: "PDF", required: "是", valid: "无", provided: "备案证.pdf", status: "已具备", note: "" },
-  { name: "固定资产投资凭证", format: "Excel/PDF", required: "是", valid: "2026年度", provided: "投资凭证汇总.xlsx", status: "需人工确认", note: "金额与备案口径需核对" },
-  { name: "设备购置合同及发票", format: "PDF（多份）", required: "是", valid: "2026-01 后", provided: "—", status: "缺失", note: "已签订 4 份合同，发票待归集" },
-  { name: "环评批复", format: "PDF", required: "是", valid: "有效期内", provided: "环评批复.pdf", status: "疑似过期", note: "批复日期 2022-09，需确认" },
-  { name: "2025 年审计报告", format: "PDF", required: "是", valid: "2025 年度", provided: "—", status: "缺失", note: "企业尚未出具" },
-  { name: "项目开工证明", format: "PDF/照片", required: "是", valid: "无", provided: "开工照片_20260312.zip", status: "疑似不合规", note: "照片无时间水印，需补证明" },
-  { name: "专利及技术说明", format: "PDF/Word", required: "否", valid: "无", provided: "专利清单.pdf", status: "已具备", note: "" }
+  { name: "企业营业执照", format: "PDF/JPG", required: "是", valid: "有效期内", provided: "营业执照2026.pdf", status: "已具备", note: "原件扫描清晰", basis: "命中文件名：营业执照2026.pdf" },
+  { name: "项目备案证", format: "PDF", required: "是", valid: "无", provided: "备案证.pdf", status: "已具备", note: "", basis: "命中文件名：备案证.pdf" },
+  { name: "固定资产投资凭证", format: "Excel/PDF", required: "是", valid: "2026年度", provided: "投资凭证汇总.xlsx", status: "需人工确认", note: "金额与备案口径需核对", basis: "内容比对：金额口径需人工核对" },
+  { name: "设备购置合同及发票", format: "PDF（多份）", required: "是", valid: "2026-01 后", provided: "—", status: "缺失", note: "已签订 4 份合同，发票待归集", basis: "目录扫描未命中合同/发票文件" },
+  { name: "环评批复", format: "PDF", required: "是", valid: "有效期内", provided: "环评批复.pdf", status: "疑似过期", note: "批复日期 2022-09，需确认", basis: "有效期规则：批复日期超 3 年" },
+  { name: "2025 年审计报告", format: "PDF", required: "是", valid: "2025 年度", provided: "—", status: "缺失", note: "企业尚未出具", basis: "目录扫描未命中审计报告" },
+  { name: "项目开工证明", format: "PDF/照片", required: "是", valid: "无", provided: "开工照片_20260312.zip", status: "疑似不合规", note: "照片无时间水印，需补证明", basis: "文件名命中，内容校验缺时间水印" },
+  { name: "专利及技术说明", format: "PDF/Word", required: "否", valid: "无", provided: "专利清单.pdf", status: "已具备", note: "", basis: "命中文件名：专利清单.pdf" }
+];
+
+GQ.qcChecks = [
+  { name: "数据一致性", status: "通过" },
+  { name: "政策条件覆盖", status: "需确认" },
+  { name: "证据引用", status: "通过" },
+  { name: "行文逻辑", status: "建议修改" },
+  { name: "格式规范", status: "通过" }
 ];
 
 GQ.docOutline = [
