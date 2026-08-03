@@ -46,7 +46,9 @@
     pptActive: 0,
     defenseCurrent: null,
     accounts: GQ.accounts.slice(),
-    security: GQ.security.map(s => Object.assign({}, s))
+    security: GQ.security.map(s => Object.assign({}, s)),
+    customRoles: [],
+    editRoleIdx: -1
   };
 
   /* ===== 图标 ===== */
@@ -291,8 +293,22 @@
     }).join("");
     const todos = d.todos.map(t =>
       '<div class="drop-item"><span class="dot ' + (t.level === "red" ? "dot-red" : t.level === "yellow" ? "dot-yellow" : "dot-blue") + '"></span><div><b>' + esc(t.module) + " · " + esc(t.text) + '</b><span>需人工确认</span><time>' + esc(t.time) + '</time></div><button class="btn btn-outline btn-sm" data-action="todo-go" data-text="' + esc(t.text) + '">处理</button></div>').join("");
-    const agents = d.agents.map(a =>
-      '<div class="agent-card"><div class="agent-ico">' + icon(a.icon) + '</div><div class="agent-meta"><b>' + esc(a.name) + '</b><span>' + esc(a.desc) + '</span><span>今日调用 ' + a.calls + " 次 · 平均 " + a.avg + "</span></div>" + st(a.status) + "</div>").join("");
+    const agents = d.agents.map(a => {
+      const busy = a.status !== "正常";
+      const cls = busy ? "orange" : "green";
+      return '<div class="agent-card">' +
+        '<div class="agent-ico' + (busy ? " agent-busy" : "") + '">' + icon(a.icon) + '</div>' +
+        '<div class="agent-meta"><b>' + esc(a.name) + '</b><span>' + esc(a.desc) + '</span>' +
+        '<span class="agent-stats">今日调用 <b>' + a.calls + '</b> 次 · 平均 ' + a.avg + '</span></div>' +
+        '<div class="agent-badge agent-badge-' + cls + '"><span class="dot dot-' + cls + '"></span>' + esc(a.status) + '</div>' +
+        '</div>';
+    }).join("");
+    const totalCalls = d.agents.reduce((s, a) => s + a.calls, 0);
+    const agentSummary = '<div class="agent-summary">' +
+      '<span><b>' + d.agents.length + '</b> Agent</span>' +
+      '<span><span class="dot dot-green"></span>' + d.agents.filter(a => a.status === "正常").length + ' 正常</span>' +
+      '<span><span class="dot dot-yellow"></span>' + d.agents.filter(a => a.status !== "正常").length + ' 繁忙</span>' +
+      '<span>总调用 <b>' + totalCalls + '</b></span></div>';
     return pageHead("工作台", "今日申报任务 18 项，9 条 Agent 建议待人工确认；关键业务链路运行正常。",
       '<button class="btn btn-primary" data-route="#/qa">' + icon("spark") + "开始智能问答</button>") +
       kpiCards(d.kpis) +
@@ -300,11 +316,11 @@
       '<div class="progress-steps">' + pipeline + "</div></div></div>" +
       '<div class="grid-2 section">' +
       '<div class="card"><div class="card-head"><div><div class="card-title">待人工确认</div><div class="card-sub">Agent 已给出建议，等待你确认后继续</div></div><button class="btn btn-outline btn-sm" data-route="#/audit">全部</button></div>' + todos + "</div>" +
-      '<div class="card"><div class="card-head"><div><div class="card-title">Agent 运行状态</div><div class="card-sub">今日 07:00 至当前</div></div></div><div class="grid-2" style="gap:12px">' + agents + "</div></div>" +
+      '<div class="card"><div class="card-head"><div><div class="card-title">Agent 运行状态</div><div class="card-sub">今日 07:00 至当前 · 6 个智能体协同运行</div></div>' + agentSummary + '</div><div class="grid-2" style="gap:12px">' + agents + "</div></div>" +
       "</div>" +
       '<div class="grid-2-1 section">' +
       '<div class="card"><div class="card-head"><div><div class="card-title">知识调用趋势</div><div class="card-sub">近 7 日智能问答与报告生成调用量</div></div></div>' + lineSvg(week, weekLabels) + "</div>" +
-      '<div class="card"><div class="card-head"><div><div class="card-title">今日要点</div></div></div>' +
+      '<div class="card"><div class="card-head"><div><div class="card-title">产业情报</div></div></div>' +
       '<div class="qa-block"><div class="qa-block-title">重点变化</div><div class="qa-text">新能源电池回收专项政策发布，建议关联 3 家目标企业。</div></div>' +
       '<div class="qa-block"><div class="qa-block-title">风险提醒</div><div class="qa-text" style="border-color:#fecaca">常州锂航材料缺口 4 项，其中设备发票需尽快催收。</div></div>' +
       '<div class="qa-block"><div class="qa-block-title">待定稿</div><div class="qa-text">《苏州智造设备更新申报书》v1.2 预评审 88 分，待你确认。</div></div>' +
@@ -314,21 +330,27 @@
   /* ===== 万智中枢 ===== */
   function viewKB() {
     if (state.kbLib) return viewKBLibrary();
-    const projects = GQ.kbProjects.map(p =>
-      '<button class="btn ' + (state.kbProject === p.id ? "btn-primary" : "btn-outline") + ' btn-sm" data-action="kb-project" data-id="' + p.id + '">' + esc(p.name) + " · " + p.count + " 个库</button>").join("");
-    const libs = GQ.kbLibraries.map(l =>
-      '<div class="card hoverable kb-lib" data-action="kb-open" data-id="' + l.id + '">' +
+    const publicIds = ["enterprise", "external", "history", "industry-news"];
+    const privateIds = ["private"];
+    const encryptedIds = ["policy"];
+    const libCard = (l, encrypted) =>
+      '<div class="card hoverable kb-lib" data-action="' + (encrypted ? "kb-locked" : "kb-open") + '" data-id="' + l.id + '">' +
       '<div class="kb-lib-head"><div class="kpi-ico">' + icon(l.icon) + "</div><div>" +
       '<div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' + esc(l.name) +
       (l.locked ? '<span class="tag tag-blue tag-plain">' + icon("lock") + "加密</span>" : "") + "</div>" +
       '<div class="card-sub">' + esc(l.desc) + "</div></div></div>" +
-      '<div class="kb-lib-foot"><span class="chip chip-blue">' + l.count + " 个文档</span><span class=\"link\">进入维护</span></div></div>").join("");
-    const current = GQ.kbProjects.find(p => p.id === state.kbProject);
-    return pageHead("知识库管理", "知识库按项目分区管理，可点击进入每个分区维护内容；每个分区内支持新建文件夹与文档维护。",
-      '<button class="btn btn-outline" data-action="kb-batch">' + icon("folder") + "批量导入</button>") +
-      '<div class="card section"><div class="card-head"><div><div class="card-title">项目分区</div><div class="card-sub">当前：' + esc(current.name) + " · " + esc(current.desc) + '</div></div><div class="page-actions">' + projects + "</div></div></div>" +
-      '<div class="card"><div class="card-head"><div><div class="card-title">知识库分区</div><div class="card-sub">点击进入分区维护知识库内容，可自行添加文件夹</div></div></div>' +
-      '<div class="grid-3">' + libs + "</div></div>";
+      '<div class="kb-lib-foot"><span class="chip chip-blue">' + l.count + ' 个文档</span><span class="link">' + (encrypted ? "不可查看" : "进入维护") + "</span></div></div>";
+    const getLib = id => GQ.kbLibraries.find(x => x.id === id);
+    const publicLibs = publicIds.map(id => { const l = getLib(id); return l ? libCard(l, false) : ""; }).join("");
+    const privateLibs = privateIds.map(id => { const l = getLib(id); return l ? libCard(l, false) : ""; }).join("");
+    const encryptedLibs = encryptedIds.map(id => { const l = getLib(id); return l ? libCard(l, true) : ""; }).join("");
+    return pageHead("知识库管理", "知识库按分区管理，可点击进入每个分区维护内容；每个分区内支持新建文件夹与文档维护。") +
+      '<div class="card"><div class="card-head"><div><div class="card-title">公开库</div><div class="card-sub">共享知识，全员可查看与维护</div></div></div>' +
+      '<div class="grid-3">' + publicLibs + "</div></div>" +
+      '<div class="card" style="margin-top:16px"><div class="card-head"><div><div class="card-title">私有库</div><div class="card-sub">个人维护，仅本人可见</div></div><button class="btn btn-outline btn-sm" data-action="kb-add-private">' + icon("plus") + "添加库</button></div>" +
+      '<div class="grid-3">' + privateLibs + "</div></div>" +
+      '<div class="card" style="margin-top:16px"><div class="card-head"><div><div class="card-title">加密库</div><div class="card-sub">机密知识，权限受限</div></div></div>' +
+      '<div class="grid-3">' + encryptedLibs + "</div></div>";
   }
 
   function viewKBLibrary() {
@@ -373,12 +395,12 @@
       '<span class="chip chip-blue">当前项目：技术改造专项</span></div>' +
       '<div class="qa-scope-row"><span class="qa-scope-label">知识范围</span>' +
       ["政策库", "企业资料", "外部资料", "历史沉淀", "私有库"].map(s => '<label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" checked> ' + s + "</label>").join("") + "</div>" +
-      '<div class="chat-box" id="qa-chat" style="max-height:440px">' +
+      '<div class="chat-box" id="qa-chat">' +
       '<div class="msg agent"><div class="msg-avatar">智</div><div class="msg-body">你好，我是 AI智库。已接入政策库、企业资料库、历史案例与内部经验。点击左侧对话记录切换项目对话，或发起新对话后直接提问。</div></div>' +
       "</div>" +
       '<div class="chat-suggests">' + suggests + "</div>" +
-      '<div class="chat-input"><textarea class="input" id="qa-input" rows="3" placeholder="输入你的问题，例如：XX市技改专项对设备投资额有什么要求？"></textarea>' +
-      '<button class="btn btn-primary" data-action="qa-ask">' + icon("send") + "提问</button></div></div></div>";
+      '<div class="chat-input qa-chat-input"><textarea class="input" id="qa-input" rows="3" placeholder="输入你的问题，例如：XX市技改专项对设备投资额有什么要求？"></textarea>' +
+      '<button class="qa-send-btn" data-action="qa-ask" title="发送提问" aria-label="发送提问">' + icon("send") + "</button></div></div></div>";
   }
 
   function askQA(question) {
@@ -482,15 +504,19 @@
 
   /* ===== 产业雷达 ===== */
   function viewIndustryConfig() {
-    const cards = GQ.industries.map(ind =>
-      '<div class="card hoverable industry-card" data-action="industry-open" data-id="' + ind.id + '"><div class="card-head"><div><div class="card-title">' + esc(ind.name) + '</div><div class="card-sub">今日新增 ' + ind.today + " 条 · 上次抓取 " + esc(ind.lastRun) + "</div></div>" + st(ind.status) + "</div>" +
-      '<div class="qa-block"><div class="qa-block-title">关键词</div><div>' + ind.keywords.map(k => '<span class="chip chip-blue">' + k + "</span>").join(" ") + "</div></div>" +
-      '<div class="qa-block"><div class="qa-block-title">来源</div><div class="qa-text">' + esc(ind.sources) + "</div></div>" +
-      '<div class="qa-block" style="margin-bottom:12px"><div class="qa-block-title">抓取频率</div><span class="chip">' + esc(ind.freq) + "</span></div>" +
-      '<div class="ai-line"><span></span><b>点击卡片进入该产业资讯时间线</b></div>' +
-      '<div class="page-actions"><button class="btn btn-outline btn-sm" data-action="industry-edit" data-id="' + ind.id + '">' + icon("edit") + "编辑</button>" +
-      '<button class="btn btn-outline btn-sm" data-action="industry-toggle" data-id="' + ind.id + '">' + icon("refresh") + (ind.status === "运行中" ? "暂停" : "启动") + "</button></div></div>").join("");
-    return pageHead("产业配置", "配置重点产业领域、关键词、政策源与新闻源，系统按频率定时抓取并自动分类去重。",
+    const cards = GQ.industries.map(ind => {
+      const indNews = GQ.news.filter(n => n.industry === ind.name).slice(0, 3);
+      const newsItems = indNews.map(n =>
+        '<div class="ind-news-item"><span class="ind-news-tag">' + n.type + '</span><span class="ind-news-title">' + esc(n.title) + '</span></div>'
+      ).join("");
+      const alert = ind.today > 0 ? '<div class="ind-alert"><span class="dot dot-red"></span>新增 ' + ind.today + ' 条 · ' + esc(ind.lastRun) + '</div>' : '<div class="ind-alert ind-alert-none">暂无新消息</div>';
+      return '<div class="card hoverable industry-card" data-action="industry-open" data-id="' + ind.id + '">' +
+        '<div class="card-head"><div><div class="card-title">' + esc(ind.name) + '</div><div class="card-sub">关键词：' + ind.keywords.join("、") + '</div></div>' + st(ind.status) + "</div>" +
+        alert +
+        (newsItems ? '<div class="ind-news-list">' + newsItems + "</div>" : '<div class="ind-news-empty">暂无资讯</div>') +
+        '<div class="ind-enter">点击进入详情 →</div></div>';
+    }).join("");
+    return pageHead("产业雷达", "跟踪重点产业领域的政策、技术与新闻动态，系统自动抓取并分类去重。",
       '<button class="btn btn-primary" data-action="industry-add">' + icon("plus") + "新增产业</button>") +
       '<div class="grid-2 section">' + cards + "</div>";
   }
@@ -531,7 +557,7 @@
       return '<div class="tl-item"><div class="tl-date">' + date + "</div>" + day + "</div>";
     }).join("");
     return pageHead((currentIndustry ? currentIndustry.name + " · " : "") + "资讯时间线", "按产业链环节展示政策、技术与新闻变化，支持收藏、备注与人工确认。",
-      '<button class="btn btn-outline" data-route="#/industry-config">' + icon("chevron") + "返回产业配置</button>") +
+      '<button class="btn btn-outline" data-route="#/industry-config">' + icon("chevron") + "返回产业雷达</button>") +
       '<div class="filter-bar"><div class="field"><span>资讯类型</span><select class="select" data-action="industry-filter"><option>全部</option><option>政策</option><option>技术</option><option>新闻</option></select></div>' +
       '<div class="field"><span>重点产业</span><select class="select" data-action="industry-filter2"><option>全部</option><option>生物医药</option><option>化工新材料</option><option>新能源电池</option><option>高端装备</option></select></div>' +
       '<button class="btn btn-outline" data-action="industry-filter-reset">重置</button></div>' +
@@ -1271,16 +1297,35 @@
 
   function viewPermission() {
     const m = GQ.roleMatrix;
-    const rows = m.perms.map(p =>
-      "<tr><td><b>" + esc(p.name) + "</b></td>" + p.value.map(v => "<td>" + (v ? '<span style="color:#1a73e8;font-weight:700">✓</span>' : '<span style="color:#cbd5e1">—</span>') + "</td>").join("") + "</tr>").join("");
-    return pageHead("权限管理", "按角色、部门、项目成员与客户归属控制查看、编辑、下载、导出与删除权限。",
-      '<button class="btn btn-primary" data-action="permission-save">' + icon("check") + "保存权限配置</button>") +
-      '<div class="grid-2"><div class="card"><div class="card-head"><div><div class="card-title">角色权限矩阵</div><div class="card-sub">RBAC + 项目/客户归属授权</div></div></div>' +
-      '<div class="table-wrap"><table class="table"><thead><tr><th>权限项</th>' + m.roles.map(r => "<th>" + esc(r) + "</th>").join("") + "</tr></thead><tbody>" + rows + "</tbody></table></div></div>" +
-      '<div class="card"><div class="card-head"><div><div class="card-title">资料分级</div><div class="card-sub">机密数据默认最小可见</div></div></div>' +
-      [["公开", "政策、新闻与行业公开资料；全员可见", "tag-green"], ["内部", "历史案例与内部经验；按部门可见", "tag-blue"], ["机密", "企业资料、财务与申报文书；按项目授权，访问审计、导出审批", "tag-red"]].map(x =>
-        '<div class="setting-row"><div><b>' + x[0] + '</b><span>' + x[1] + "</span></div>" + st(x[0]) + "</div>").join("") +
-      '<div class="qa-block" style="margin-top:12px"><div class="qa-block-title">客户归属规则</div><div class="qa-text">销售/项目角色按客户归属与部门范围访问；跨项目默认不可见；人员调岗或离职时管理员回收权限并保留历史审计。</div></div></div></div>';
+    const customRoles = state.customRoles || [];
+    const allRoles = [...m.roles, ...customRoles];
+    const perms = m.perms;
+    const renderRow = (p, vals) => {
+      const cells = allRoles.map((r, ri) => "<td>" + (vals[ri] ? '<span style="color:#1a73e8;font-weight:700">✓</span>' : '<span style="color:#cbd5e1">—</span>') + "</td>").join("");
+      if (p.sub && p.sub.length) {
+        return p.sub.map((sub, idx) =>
+          "<tr>" +
+          (idx === 0 ? '<td rowspan="' + p.sub.length + '"><b>' + esc(p.name) + "</b></td>" : "") +
+          '<td style="font-size:12px;color:var(--text-2)">' + esc(sub) + "</td>" +
+          cells +
+          "</tr>").join("");
+      }
+      return "<tr><td colspan=\"2\"><b>" + esc(p.name) + "</b></td>" + cells + "</tr>";
+    };
+    const matrixRows = perms.map(p => {
+      const vals = allRoles.map((r, ri) => {
+        const bi = m.roles.indexOf(r);
+        if (bi >= 0) return p.value[bi];
+        const cr = customRoles[ri - m.roles.length];
+        return cr ? (cr.perms[perms.indexOf(p)] || 0) : 0;
+      });
+      return renderRow(p, vals);
+    }).join("");
+    return pageHead("权限管理", "按角色、部门、项目成员与客户归属控制查看、编辑、下载、导出与删除权限。") +
+      '<div class="section"><div class="card"><div class="card-head"><div><div class="card-title">角色权限矩阵</div><div class="card-sub">RBAC + 项目/客户归属授权</div></div>' +
+      '<button class="btn btn-outline btn-sm" data-action="perm-add-role">' + icon("plus") + "新增角色</button></div>" +
+      '<div class="table-wrap"><table class="table"><thead><tr><th style="min-width:100px">权限项</th><th style="min-width:80px">子项</th>' +
+      allRoles.map(r => '<th class="role-th" data-action="perm-edit-role" data-role="' + esc(r) + '" style="cursor:pointer">' + esc(r) + '</th>').join("") + "</tr></thead><tbody>" + matrixRows + "</tbody></table></div></div></div>";
   }
 
   function viewAudit() {
@@ -1328,7 +1373,10 @@
 
   /* ===== 事件绑定 ===== */
   function bindLogin() {
-    $("#login-btn").addEventListener("click", doLogin);
+    const btn = $("#login-btn");
+    if (btn) {
+      btn.addEventListener("click", doLogin);
+    }
     $$(".role-chip").forEach(chip => chip.addEventListener("click", () => {
       $$(".role-chip").forEach(c => c.classList.remove("active"));
       chip.classList.add("active");
@@ -1337,11 +1385,12 @@
   }
 
   function doLogin() {
-    const account = $("#login-account").value.trim() || "pm01";
-    const pwd = $("#login-password").value || "demo";
-    const role = $("#login-role").value || "申报顾问";
+    const account = ($("#login-account")?.value || "").trim() || "pm01";
+    const pwd = $("#login-password")?.value || "";
+    const role = ($("#login-role")?.value || "申报顾问");
     const u = Object.assign({}, GQ.users[account] || { name: account === "admin" ? "赵敏" : "顾晓岚", dept: "项目部" }, { role });
     const btn = $("#login-btn");
+    if (!btn) return;
     btn.disabled = true;
     btn.innerHTML = '<span class="spin" style="width:15px;height:15px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin .8s linear infinite"></span> 正在登录…';
     setTimeout(() => {
@@ -1359,9 +1408,8 @@
       state.route = r;
       renderView();
       toast("欢迎回来，" + u.name + "（" + u.role + "）", "success");
-    }, 900);
+    }, 300);
   }
-
   function renderNotifications() {
     $("#notify-list").innerHTML = GQ.notifications.map(n =>
       '<div class="drop-item"><span class="dot ' + (n.level === "red" ? "dot-red" : n.level === "yellow" ? "dot-yellow" : "dot-blue") + '"></span><div><b>' + esc(n.title) + '</b><span>' + esc(n.text) + "</span><time>" + esc(n.time) + "</time></div></div>").join("");
@@ -1586,6 +1634,14 @@
         break;
       }
       case "kb-batch": toast("批量导入演示：已选择 12 个文件，开始解析入库", "success"); break;
+      case "kb-locked": toast("机密库 不可查看", "warn"); break;
+      case "kb-add-private":
+        modal("添加私有库", "创建个人私有知识库",
+          '<label class="field"><span>库名称</span><input class="input" placeholder="如：我的项目草稿"></label>' +
+          '<label class="field" style="margin-top:14px"><span>库描述</span><textarea class="input" rows="3" placeholder="描述这个库的用途和内容范围"></textarea></label>',
+          '<button class="btn btn-outline" data-close="modal">取消</button><button class="btn btn-primary" data-action="kb-add-save">创建</button>');
+        break;
+      case "kb-add-save": closeModal(); toast("私有库已创建", "success"); break;
       case "qa-suggest": askQA(el.dataset.q); break;
       case "qa-ask": askQA(); break;
       case "qa-new": {
@@ -1875,6 +1931,77 @@
       }
       case "account-save": closeModal(); toast("账号已创建并发送初始密码（演示）", "success"); break;
       case "permission-save": toast("权限配置已保存并即时生效", "success"); break;
+      case "perm-add-role": {
+        const perms = GQ.roleMatrix.perms.map(p => p.name);
+        const checkboxes = perms.map(pn =>
+          '<label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:6px 0">' +
+          '<input type="checkbox" class="perm-check">' + esc(pn) + '</label>').join("");
+        modal("新增角色", "填写角色名称并勾选权限项",
+          '<label class="field"><span>角色名称</span><input class="input" id="perm-role-name" placeholder="如：运营专员"></label>' +
+          '<div style="margin-top:14px"><b style="font-size:13px">权限项</b></div><div style="margin-top:8px">' + checkboxes + "</div>",
+          '<button class="btn btn-outline btn-sm" data-action="perm-add-confirm">' + icon("check") + '确认创建</button><button class="btn btn-outline" data-close="modal">取消</button>');
+        break;
+      }
+      case "perm-add-confirm": {
+        const nameInput = document.getElementById("perm-role-name");
+        const name = nameInput ? nameInput.value.trim() : "";
+        if (!name) { toast("请输入角色名称", "warn"); break; }
+        const checks = document.querySelectorAll(".perm-check");
+        const vals = Array.from(checks).map(c => c.checked ? 1 : 0);
+        state.customRoles.push({ name, perms: vals });
+        state.editRoleIdx = -1;
+        closeModal();
+        toast("角色「" + name + "」已创建", "success");
+        renderView();
+        break;
+      }
+      case "perm-edit-role": {
+        const roleName = el.dataset.role;
+        const isCustom = GQ.roleMatrix.roles.indexOf(roleName) < 0;
+        if (!isCustom) { toast("内置角色不可编辑", "warn"); break; }
+        const crIdx = state.customRoles.findIndex(r => r.name === roleName);
+        if (crIdx < 0) break;
+        state.editRoleIdx = crIdx;
+        const cr = state.customRoles[crIdx];
+        const perms = GQ.roleMatrix.perms;
+        const checkboxes = perms.map((p, i) =>
+          '<label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:6px 0">' +
+          '<input type="checkbox" class="perm-edit-check"' + (cr.perms[i] ? " checked" : "") + '>' + esc(p.name) + '</label>').join("");
+        modal("编辑角色 · " + esc(roleName), "修改权限项或删除此角色",
+          '<label class="field"><span>角色名称</span><input class="input" id="perm-edit-name" value="' + esc(roleName) + '"></label>' +
+          '<div style="margin-top:14px"><b style="font-size:13px">权限项</b></div><div style="margin-top:8px">' + checkboxes + "</div>",
+          '<button class="btn btn-outline btn-sm" data-action="perm-edit-confirm">' + icon("check") + '保存修改</button>' +
+          '<button class="btn btn-outline btn-sm" style="color:#e8364f;border-color:#e8364f" data-action="perm-delete-role" data-role="' + esc(roleName) + '">' + icon("trash") + '删除角色</button>' +
+          '<button class="btn btn-outline" data-close="modal">取消</button>');
+        break;
+      }
+      case "perm-edit-confirm": {
+        const idx = state.editRoleIdx;
+        if (idx < 0) break;
+        const nameInput = document.getElementById("perm-edit-name");
+        const newName = nameInput ? nameInput.value.trim() : "";
+        if (!newName) { toast("角色名称不能为空", "warn"); break; }
+        const checks = document.querySelectorAll(".perm-edit-check");
+        const vals = Array.from(checks).map(c => c.checked ? 1 : 0);
+        state.customRoles[idx].name = newName;
+        state.customRoles[idx].perms = vals;
+        state.editRoleIdx = -1;
+        closeModal();
+        toast("角色「" + newName + "」已更新", "success");
+        renderView();
+        break;
+      }
+      case "perm-delete-role": {
+        const roleName = el.dataset.role;
+        const idx = state.customRoles.findIndex(r => r.name === roleName);
+        if (idx < 0) break;
+        state.customRoles.splice(idx, 1);
+        state.editRoleIdx = -1;
+        closeModal();
+        toast("角色「" + roleName + "」已删除", "success");
+        renderView();
+        break;
+      }
       case "audit-detail": auditDetail(el.dataset.id); break;
       case "audit-export": toast("审计日志已导出（演示）", "success"); break;
       case "security-toggle": {
@@ -1994,8 +2121,10 @@
   });
 
   $("#menu-btn").addEventListener("click", () => $("#sidebar").classList.toggle("open"));
-  $("#search-btn").addEventListener("click", () => openSearch($("#global-search").value.trim()));
-  $("#global-search").addEventListener("keydown", e => { if (e.key === "Enter") openSearch(e.target.value.trim()); });
+  const searchBtn = $("#search-btn");
+  if (searchBtn) searchBtn.addEventListener("click", () => { const inp = $("#global-search"); if (inp) openSearch(inp.value.trim()); });
+  const searchInput = $("#global-search");
+  if (searchInput) searchInput.addEventListener("keydown", e => { if (e.key === "Enter") openSearch(e.target.value.trim()); });
   const aiOrb = $("#ai-orb");
   if (aiOrb) aiOrb.addEventListener("click", () => {
     location.hash = "#/qa";

@@ -98,7 +98,8 @@ GQ.kbLibraries = [
   { id: "enterprise", name: "企业资料", icon: "users", locked: false, desc: "企业画像、备案项目与证照材料", count: 6 },
   { id: "external", name: "外部资料", icon: "external", locked: false, desc: "公开政策、新闻与行业报告", count: 12 },
   { id: "history", name: "历史沉淀", icon: "folder", locked: false, desc: "历史案例、申报书样本与复盘", count: 5 },
-  { id: "private", name: "私有库", icon: "lock", locked: true, desc: "个人草稿与内部经验，仅本人可见", count: 3 }
+  { id: "industry-news", name: "产业资讯", icon: "radar", locked: false, desc: "产业政策、技术动态与行业新闻", count: 9 },
+  { id: "private", name: "个人库", icon: "lock", locked: true, desc: "个人草稿与内部经验，仅本人可见", count: 3 }
 ];
 
 GQ.kbLibraryData = {
@@ -473,17 +474,13 @@ GQ.accounts = [
 GQ.roleMatrix = {
   roles: ["系统管理员", "项目经理", "申报顾问", "市场人员", "财务复核"],
   perms: [
-    { name: "知识库维护", value: [1, 1, 0, 0, 0] },
-    { name: "智能问答 / 报告生成", value: [1, 1, 1, 1, 0] },
-    { name: "产业雷达配置与确认", value: [1, 1, 0, 1, 0] },
-    { name: "企业筛选与跟进池", value: [1, 1, 1, 1, 0] },
-    { name: "项目评估与访谈", value: [1, 1, 1, 0, 0] },
-    { name: "材料管理与文书生成", value: [1, 1, 1, 0, 0] },
-    { name: "AI 预评审与质量控制", value: [1, 1, 1, 0, 0] },
+    { name: "工作台", value: [1, 1, 1, 1, 1] },
+    { name: "AI智库", value: [1, 1, 1, 1, 1] },
+    { name: "知识库管理", value: [1, 1, 1, 0, 0] },
+    { name: "客户开发", value: [1, 1, 1, 1, 0] },
+    { name: "文书撰写", sub: ["全部项目", "个人项目"], value: [1, 1, 1, 0, 0] },
     { name: "答辩准备", value: [1, 1, 1, 0, 0] },
-    { name: "账号与权限配置", value: [1, 0, 0, 0, 0] },
-    { name: "审计记录查看", value: [1, 0, 0, 0, 0] },
-    { name: "导出与审批", value: [1, 1, 0, 0, 0] }
+    { name: "系统设置", sub: ["账号管理", "权限管理"], value: [1, 0, 0, 0, 0] }
   ]
 };
 
