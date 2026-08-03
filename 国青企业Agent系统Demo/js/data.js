@@ -8,40 +8,18 @@ GQ.users = {
 
 GQ.nav = [
   { id: "home", title: "工作台", icon: "home", route: "#/home" },
-  {
-    id: "m01", title: "万智中枢", icon: "book", route: "#/kb",
-    children: [
-      { id: "qa", title: "AI智库", route: "#/qa" },
-      { id: "kb", title: "知识库管理", route: "#/kb" },
-      { id: "report", title: "报告生成", route: "#/report", hidden: true },
-      { id: "trace", title: "来源追溯", route: "#/trace", hidden: true }
-    ]
-  },
-  {
-    id: "m02", title: "产业雷达", icon: "radar", route: "#/industry-config",
-    children: [
-      { id: "industry-config", title: "产业配置", route: "#/industry-config" },
-      { id: "industry-timeline", title: "资讯时间线", route: "#/industry-timeline" },
-      { id: "industry-alert", title: "重点提醒", route: "#/industry-alert" },
-      { id: "industry-pool", title: "资讯沉淀", route: "#/industry-pool" }
-    ]
-  },
+  { id: "qa", title: "AI智库", icon: "spark", route: "#/qa" },
+  { id: "kb", title: "知识库管理", icon: "book", route: "#/kb" },
+  { id: "m02", title: "产业雷达", icon: "radar", route: "#/industry-config" },
   {
     id: "m03", title: "客户开发", icon: "users", route: "#/companies",
     children: [
       { id: "companies", title: "企业筛选", route: "#/companies" },
-      { id: "evaluate", title: "项目评估", route: "#/evaluate" },
-      { id: "interview", title: "访谈准备", route: "#/interview" }
+      { id: "evaluate", title: "项目评估", route: "#/evaluate" }
     ]
   },
   {
-    id: "m04", title: "文书智写", icon: "file", route: "#/materials",
-    children: [
-      { id: "materials", title: "材料管理", route: "#/materials" },
-      { id: "doc", title: "文书制作", route: "#/doc" },
-      { id: "review", title: "AI评审官", route: "#/review" },
-      { id: "qc", title: "质量控制", route: "#/qc" }
-    ]
+    id: "m04", title: "文书智写", icon: "file", route: "#/materials"
   },
   {
     id: "m05", title: "答辩准备", icon: "ppt", route: "#/ppt",
@@ -54,9 +32,7 @@ GQ.nav = [
     id: "m06", title: "系统设置", icon: "settings", route: "#/accounts",
     children: [
       { id: "accounts", title: "账号管理", route: "#/accounts" },
-      { id: "permission", title: "权限管理", route: "#/permission" },
-      { id: "audit", title: "审计记录", route: "#/audit" },
-      { id: "security", title: "安全策略", route: "#/security" }
+      { id: "permission", title: "权限管理", route: "#/permission" }
     ]
   }
 ];
@@ -80,7 +56,7 @@ GQ.dashboard = {
   pipeline: [
     { label: "线索筛选", count: 128, active: true },
     { label: "项目评估", count: 42, active: true },
-    { label: "访谈准备", count: 19, active: true },
+    { label: "待核实问题", count: 19, active: true },
     { label: "材料管理", count: 36, active: true },
     { label: "文书生成", count: 24, active: true },
     { label: "答辩演练", count: 11, active: false }
@@ -326,6 +302,88 @@ GQ.materials = [
   { name: "2025 年审计报告", format: "PDF", required: "是", valid: "2025 年度", provided: "—", status: "缺失", note: "企业尚未出具", basis: "目录扫描未命中审计报告" },
   { name: "项目开工证明", format: "PDF/照片", required: "是", valid: "无", provided: "开工照片_20260312.zip", status: "疑似不合规", note: "照片无时间水印，需补证明", basis: "文件名命中，内容校验缺时间水印" },
   { name: "专利及技术说明", format: "PDF/Word", required: "否", valid: "无", provided: "专利清单.pdf", status: "已具备", note: "", basis: "命中文件名：专利清单.pdf" }
+];
+
+GQ.applications = [
+  {
+    id: "mkd-2026",
+    year: "2026",
+    company: "华东某动力科技有限公司",
+    shortName: "当前企业",
+    type: "国债两新",
+    policy: "2026年工业重点领域设备更新改造项目",
+    progress: 72,
+    owner: "顾晓岚",
+    updated: "2026-08-02 17:20",
+    status: "资料核验中",
+    completeness: 78,
+    score: 86,
+    alert: "项目资料缺失：部分设备缺照片，合同/发票/付款回单口径待核对",
+    stagnation: false,
+    summary: "围绕设备更新、淘汰老旧设备和产线效率提升，申报国债两新设备更新专项。"
+  },
+  {
+    id: "szzzao-2026",
+    year: "2026",
+    company: "华东某精密装备有限公司",
+    shortName: "对比企业A",
+    type: "国债两新",
+    policy: "2026年工业领域设备更新和技术改造",
+    progress: 58,
+    owner: "陈志远",
+    updated: "2026-07-29 10:30",
+    status: "文书初稿",
+    completeness: 64,
+    score: 82,
+    alert: "项目进度停滞30天未更新，审计报告与设备发票清单未补齐",
+    stagnation: true,
+    summary: "高精度主轴技改项目，设备购置占比高，需补齐资金口径与发票证据。"
+  },
+  {
+    id: "czlh-2025",
+    year: "2025",
+    company: "华东某新能源科技有限公司",
+    shortName: "对比企业B",
+    type: "国债两新",
+    policy: "大规模设备更新与消费品以旧换新专项",
+    progress: 91,
+    owner: "王璐",
+    updated: "2025-12-18 14:45",
+    status: "智能评分",
+    completeness: 92,
+    score: 90,
+    alert: "评分意见待人工确认",
+    stagnation: false,
+    summary: "新能源电池产线升级项目，材料基本齐备，进入终版评分复核。"
+  }
+];
+
+GQ.enterpriseFiles = [
+  { id: "f01", group: "申报附件", name: "项目情况汇总表_脱敏示例.xlsx", type: "Excel", size: "128 KB", status: "已识别", note: "项目投资与设备清单主表" },
+  { id: "f02", group: "申报附件", name: "企业承诺书_脱敏示例.docx", type: "Word", size: "46 KB", status: "已识别", note: "承诺主体与申报企业一致" },
+  { id: "f03", group: "申报附件", name: "现场核查情况表_脱敏示例.docx", type: "Word", size: "58 KB", status: "待核对", note: "现场核查日期未填写" },
+  { id: "f04", group: "设备合同/发票/照片", name: "设备证据索引表_脱敏示例.xlsx", type: "Excel", size: "92 KB", status: "已识别", note: "作为设备证据索引表" },
+  { id: "f05", group: "设备合同/发票/照片", name: "设备A_合同发票包_缺现场照片.docx", type: "Word", size: "2.1 MB", status: "缺照片", note: "命中文件名缺设备照片" },
+  { id: "f06", group: "设备合同/发票/照片", name: "设备B_合并付款凭证_金额待核.docx", type: "Word", size: "2.8 MB", status: "金额异常", note: "付款金额与合同/发票口径不一致" },
+  { id: "f07", group: "设备合同/发票/照片", name: "设备C_使用地点待核_缺照片.docx", type: "Word", size: "2.6 MB", status: "需人工确认", note: "使用地点与申报主体需核实" },
+  { id: "f08", group: "淘汰设备证明", name: "淘汰设备明细及现场照片汇总_脱敏示例.docx", type: "Word", size: "5.4 MB", status: "已识别", note: "支撑以旧换新和淘汰落后设备" }
+];
+
+GQ.materialInsights = [
+  { id: "miss-photo", level: "高", title: "缺失资料", text: "设备A、设备C等证据包缺少现场照片，影响设备真实性证明。" },
+  { id: "amount-conflict", level: "高", title: "金额逻辑矛盾", text: "设备B存在合并付款且金额差异，需拆分合同、发票、付款回单口径。" },
+  { id: "site-check", level: "中", title: "主体/地点待核实", text: "部分设备备注为异地使用，需确认是否纳入当前企业本次申报范围。" },
+  { id: "seal-missing", level: "中", title: "附件完整度", text: "现场核查情况表缺核查日期，第三方机构使用情况表需补盖章页。" }
+];
+
+GQ.liangxinOutline = [
+  { id: "base", title: "一、项目单位基本情况", completeness: 92, missing: [], content: "当前申报企业具备设备更新申报主体资格，主营动力部件制造与精密加工，近年围绕自动化产线持续投入。" },
+  { id: "need", title: "二、项目建设背景与必要性", completeness: 88, missing: ["需补充淘汰设备与新增设备效率对比"], content: "项目聚焦设备老化、加工效率不足和单位能耗偏高等问题，通过设备更新提升产能稳定性与产品一致性。" },
+  { id: "plan", title: "三、建设内容与设备更新方案", completeness: 76, missing: ["部分设备缺现场照片", "设备购置合同与发票编号需补齐"], content: "项目拟更新数控加工、检测、抛光、起重等关键设备，形成从加工、检测到转运的连续化生产能力。" },
+  { id: "fund", title: "四、投资构成与资金筹措", completeness: 68, missing: ["合并付款需拆分", "多付 2000 元需说明", "银行付款回单未完全归集"], content: "项目投资以设备购置和配套改造为主，资金来源包括企业自有资金和银行授信，需按申报口径统一合同、发票与付款金额。" },
+  { id: "green", title: "五、节能降碳与安全环保", completeness: 72, missing: ["节能测算表", "安全环保合规说明"], content: "设备更新后预计提升单位产出效率，降低老旧设备维护频次，并改善现场安全和能耗管理水平。" },
+  { id: "benefit", title: "六、实施计划与预期效益", completeness: 84, missing: ["产能爬坡测算依据"], content: "项目按设备采购、安装调试、试运行、验收四阶段推进，建成后预计提升生产效率并增强订单交付能力。" },
+  { id: "appendix", title: "七、附件与证明材料", completeness: 61, missing: ["现场核查日期", "部分盖章页", "设备照片缺口清单"], content: "附件包括项目情况汇总表、企业承诺书、现场核查表、设备合同发票照片和第三方机构使用情况表等。" }
 ];
 
 GQ.qcChecks = [

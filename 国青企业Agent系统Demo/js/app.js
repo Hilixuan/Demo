@@ -1,4 +1,4 @@
-/* 国青企业 Agent 系统 · 一阶段可交互 Demo */
+﻿/* 国青企业 Agent 系统 · 一阶段可交互 Demo */
 (function () {
   "use strict";
 
@@ -21,6 +21,18 @@
     alertsDone: new Set(),
     docRefined: false,
     materialConfirmed: false,
+    applicationId: null,
+    applicationTab: "files",
+    activeOutline: "base",
+    alertCollapsed: false,
+    aiScanDone: false,
+    resolvedInsights: new Set(),
+    docGenerated: false,
+    locatedTarget: null,
+    archivedApps: new Set(),
+    scoreResolved: new Set(),
+    appSnapshots: [],
+    scoreCollapsed: false,
     qcChecked: false,
     qcApproved: false,
     qcIssueState: {},
@@ -148,10 +160,12 @@
 
   /* ===== 路由与导航 ===== */
   function findPage(route) {
+    const routeHash = route && route.indexOf("#/") === 0 ? route : "#/" + route;
     for (const group of GQ.nav) {
-      if (group.route === route) return { group, page: group, parent: null };
+      if (group.route === routeHash) return { group, page: group, parent: null };
+      if (group.id === "m02" && routeHash.indexOf("#/industry-") === 0) return { group, page: group, parent: null };
       if (group.children) {
-        const p = group.children.find(c => c.route === route);
+        const p = group.children.find(c => c.route === routeHash);
         if (p) return { group, page: p, parent: group };
       }
     }
@@ -165,10 +179,11 @@
   function renderNav() {
     const nav = $("#side-nav");
     const route = state.route;
+    const routeHash = route && route.indexOf("#/") === 0 ? route : "#/" + route;
     let html = "";
     for (const group of GQ.nav) {
       const hasKids = group.children && group.children.length;
-      const activeParent = hasKids ? group.children.some(c => c.route === route) : group.route === route;
+      const activeParent = hasKids ? group.children.some(c => c.route === routeHash) : (group.route === routeHash || (group.id === "m02" && routeHash.indexOf("#/industry-") === 0));
       const open = (activeParent || state.expandedNav.has(group.id)) ? " open" : "";
       html += '<div class="nav-group">';
       if (hasKids) {
@@ -176,11 +191,11 @@
         html += '<div class="nav-sub' + open + '" id="nav-sub-' + group.id + '">';
         for (const c of group.children) {
           if (c.hidden) continue;
-          html += '<button class="nav-sub-item' + (c.route === route ? " active" : "") + '" data-route="' + c.route + '">' + esc(c.title) + "</button>";
+          html += '<button class="nav-sub-item' + (c.route === routeHash ? " active" : "") + '" data-route="' + c.route + '">' + esc(c.title) + "</button>";
         }
         html += "</div>";
       } else {
-        html += '<button class="nav-item' + (group.route === route ? " active" : "") + '" data-route="' + group.route + '">' + icon(group.icon) + "<span>" + group.title + "</span></button>";
+        html += '<button class="nav-item' + (activeParent ? " active" : "") + '" data-route="' + group.route + '">' + icon(group.icon) + "<span>" + group.title + "</span></button>";
       }
       html += "</div>";
     }
@@ -205,15 +220,15 @@
       case "trace": view.innerHTML = viewTrace(); break;
       case "industry-config": view.innerHTML = viewIndustryConfig(); break;
       case "industry-timeline": view.innerHTML = viewIndustryTimeline(); break;
-      case "industry-alert": view.innerHTML = viewIndustryAlert(); break;
-      case "industry-pool": view.innerHTML = viewIndustryPool(); break;
+      case "industry-alert": go("#/industry-config"); return;
+      case "industry-pool": go("#/industry-config"); return;
       case "companies": view.innerHTML = viewCompanies(); break;
       case "evaluate": view.innerHTML = viewEvaluate(); break;
-      case "interview": view.innerHTML = viewInterview(); break;
+      case "interview": go("#/evaluate"); return;
       case "materials": view.innerHTML = viewMaterials(); break;
-      case "doc": view.innerHTML = viewDoc(); break;
-      case "review": view.innerHTML = viewReview(); break;
-      case "qc": view.innerHTML = viewQC(); break;
+      case "doc": state.applicationTab = "writer"; view.innerHTML = viewMaterials(); break;
+      case "review": state.applicationTab = "score"; view.innerHTML = viewMaterials(); break;
+      case "qc": state.applicationTab = "tune"; view.innerHTML = viewMaterials(); break;
       case "ppt": view.innerHTML = viewPPT(); break;
       case "defense": view.innerHTML = viewDefense(); break;
       case "accounts": view.innerHTML = viewAccounts(); break;
@@ -230,6 +245,7 @@
   /* ===== 页面组件 ===== */
   function pageHead(title, sub, actions) {
     return '<div class="page-head"><div><div class="page-title">' + title + '</div><div class="page-sub">' + sub + "</div></div>" +
+      '<div class="ai-pulse-strip" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>' +
       (actions ? '<div class="page-actions">' + actions + "</div>" : "") + "</div>";
   }
 
@@ -467,10 +483,11 @@
   /* ===== 产业雷达 ===== */
   function viewIndustryConfig() {
     const cards = GQ.industries.map(ind =>
-      '<div class="card hoverable"><div class="card-head"><div><div class="card-title">' + esc(ind.name) + '</div><div class="card-sub">今日新增 ' + ind.today + " 条 · 上次抓取 " + esc(ind.lastRun) + "</div></div>" + st(ind.status) + "</div>" +
+      '<div class="card hoverable industry-card" data-action="industry-open" data-id="' + ind.id + '"><div class="card-head"><div><div class="card-title">' + esc(ind.name) + '</div><div class="card-sub">今日新增 ' + ind.today + " 条 · 上次抓取 " + esc(ind.lastRun) + "</div></div>" + st(ind.status) + "</div>" +
       '<div class="qa-block"><div class="qa-block-title">关键词</div><div>' + ind.keywords.map(k => '<span class="chip chip-blue">' + k + "</span>").join(" ") + "</div></div>" +
       '<div class="qa-block"><div class="qa-block-title">来源</div><div class="qa-text">' + esc(ind.sources) + "</div></div>" +
       '<div class="qa-block" style="margin-bottom:12px"><div class="qa-block-title">抓取频率</div><span class="chip">' + esc(ind.freq) + "</span></div>" +
+      '<div class="ai-line"><span></span><b>点击卡片进入该产业资讯时间线</b></div>' +
       '<div class="page-actions"><button class="btn btn-outline btn-sm" data-action="industry-edit" data-id="' + ind.id + '">' + icon("edit") + "编辑</button>" +
       '<button class="btn btn-outline btn-sm" data-action="industry-toggle" data-id="' + ind.id + '">' + icon("refresh") + (ind.status === "运行中" ? "暂停" : "启动") + "</button></div></div>").join("");
     return pageHead("产业配置", "配置重点产业领域、关键词、政策源与新闻源，系统按频率定时抓取并自动分类去重。",
@@ -494,6 +511,7 @@
   }
 
   function viewIndustryTimeline() {
+    const currentIndustry = GQ.industries.find(ind => ind.name === state.industryName);
     const list = GQ.news.filter(n =>
       (state.industryType === "全部" || n.type === state.industryType) &&
       (state.industryName === "全部" || n.industry === state.industryName));
@@ -512,7 +530,8 @@
       }).join("");
       return '<div class="tl-item"><div class="tl-date">' + date + "</div>" + day + "</div>";
     }).join("");
-    return pageHead("资讯时间线", "按产业链环节展示政策、技术与新闻变化，支持收藏、备注与人工确认。") +
+    return pageHead((currentIndustry ? currentIndustry.name + " · " : "") + "资讯时间线", "按产业链环节展示政策、技术与新闻变化，支持收藏、备注与人工确认。",
+      '<button class="btn btn-outline" data-route="#/industry-config">' + icon("chevron") + "返回产业配置</button>") +
       '<div class="filter-bar"><div class="field"><span>资讯类型</span><select class="select" data-action="industry-filter"><option>全部</option><option>政策</option><option>技术</option><option>新闻</option></select></div>' +
       '<div class="field"><span>重点产业</span><select class="select" data-action="industry-filter2"><option>全部</option><option>生物医药</option><option>化工新材料</option><option>新能源电池</option><option>高端装备</option></select></div>' +
       '<button class="btn btn-outline" data-action="industry-filter-reset">重置</button></div>' +
@@ -667,7 +686,7 @@
       '<div class="qa-block"><div class="qa-block-title">材料缺口</div><div>' + r.gaps.map(g => '<span class="chip" style="background:#fee2e2;color:#ef4444">' + g + "</span>").join(" ") + "</div></div>" +
       '<div class="qa-block"><div class="qa-block-title">风险提示</div>' + r.risks.map(x => '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">' + st(x.level + "风险") + "<span>" + esc(x.text) + "</span></div>").join("") + "</div>" +
       '<div class="page-actions"><button class="btn btn-primary" data-action="eval-confirm">' + icon("check") + "人工确认立项</button>" +
-      '<button class="btn btn-outline" data-action="eval-interview">' + icon("chat") + "发起访谈准备</button>" +
+      '<button class="btn btn-outline" data-action="eval-interview">' + icon("chat") + "生成待核实问题</button>" +
       '<button class="btn btn-outline" data-action="eval-export">' + icon("download") + "导出报告</button></div>";
     const reportHtml =
       '<div class="doc-preview"><h3>' + esc(c.name) + " · 项目评估分析报告</h3>" +
@@ -939,6 +958,230 @@
       "</tbody></table></div></div></div>";
   }
 
+  /* ===== 文书智写 · 项目工作台覆盖版 ===== */
+  function currentApplication() {
+    return GQ.applications.find(a => a.id === state.applicationId) || GQ.applications[0];
+  }
+
+  function appArchived(app) {
+    return !!(app && state.archivedApps.has(app.id));
+  }
+
+  function appProgress(app) {
+    return appArchived(app) ? 100 : app.progress;
+  }
+
+  function appStatus(app) {
+    return appArchived(app) ? "已归档" : app.status;
+  }
+
+  function viewMaterials() {
+    if (!state.applicationId) return viewApplicationProjects();
+    return viewApplicationWorkspace();
+  }
+
+  function viewApplicationProjects() {
+    const grouped = GQ.applications.reduce((acc, item) => {
+      (acc[item.year] || (acc[item.year] = [])).push(item);
+      return acc;
+    }, {});
+    const alerts = GQ.applications.filter(a => a.alert).map(a =>
+      '<div class="app-alert-item"><span class="dot ' + (a.stagnation ? "dot-red" : "dot-yellow") + '"></span><span><b>' + esc(a.company) + '</b> ' + esc(a.alert) + "</span></div>").join("");
+    const years = Object.keys(grouped).sort((a, b) => b.localeCompare(a)).map(year =>
+      '<div class="app-year"><div class="app-year-title">' + esc(year) + ' 年申报项目</div><div class="app-project-grid">' +
+      grouped[year].sort((a, b) => b.updated.localeCompare(a.updated)).map(app =>
+        '<button class="app-project-card" data-action="app-open" data-id="' + app.id + '">' +
+        '<div class="app-project-head"><div><div class="app-company">' + esc(app.company) + '</div><div class="card-sub">' + esc(app.policy) + '</div></div>' + st(appStatus(app)) + '</div>' +
+        '<div class="app-project-meta"><span>' + esc(app.type) + '</span><span>负责人：' + esc(app.owner) + '</span><span>更新：' + esc(app.updated) + '</span></div>' +
+        '<div class="app-progress-line"><div><b>' + appProgress(app) + '%</b><span>项目进度</span></div><div class="bar"><i style="width:' + appProgress(app) + '%"></i></div></div>' +
+        '<div class="app-card-foot"><span>资料完整度 ' + app.completeness + '%</span><span>智能评分 ' + app.score + '</span></div>' +
+        '<div class="app-summary">' + esc(app.summary) + '</div></button>').join("") +
+      '</div></div>').join("");
+    return pageHead("项目管理", "文书智写以企业申报项目为中心组织资料、文书生成、AI调优与智能评分；项目按年份拆分，并按更新时间倒序展示。",
+      '<button class="btn btn-primary" data-action="app-new-project">' + icon("plus") + "新增企业项目</button>") +
+      '<div class="app-alert-float ' + (state.alertCollapsed ? "collapsed" : "") + '">' +
+      '<button class="app-alert-toggle" data-action="app-toggle-alert">' + icon(state.alertCollapsed ? "bell" : "x") + '</button>' +
+      (state.alertCollapsed
+        ? '<div class="app-alert-mini"><div class="ai-orbit tiny"><b>AI</b></div><span>告警 3</span></div>'
+        : '<div class="app-alert-float-body"><div class="ai-orbit tiny"><b>AI</b></div><div><div class="app-alert-title">AI告警信息</div>' + alerts + '</div></div>') +
+      '</div>' + years;
+  }
+
+  function viewApplicationWorkspace() {
+    const app = currentApplication();
+    const readonly = appArchived(app);
+    const tabs = [
+      ["files", "企业资料库"],
+      ["writer", "文书智写"],
+      ["tune", "AI调优"],
+      ["score", "智能评分"]
+    ].map(t => '<button class="tab ' + (state.applicationTab === t[0] ? "active" : "") + '" data-action="app-tab" data-tab="' + t[0] + '">' + t[1] + "</button>").join("");
+    const body = state.applicationTab === "files" ? viewEnterpriseFiles(app)
+      : state.applicationTab === "writer" ? viewSmartWriter(app)
+      : state.applicationTab === "tune" ? viewAiTuneV2(app)
+      : viewSmartScoreV2(app);
+    const topActions = state.applicationTab === "score"
+      ? '<div class="score-global-actions"><button class="btn btn-outline btn-sm" data-action="app-export-doc">' + icon("download") + '导出文档</button><button class="btn btn-primary btn-sm" data-action="app-archive"' + (readonly ? " disabled" : "") + '>' + icon("lock") + '归档项目</button></div>'
+      : "";
+    return '<div class="app-workspace-head">' +
+      '<div class="page-actions"><button class="btn btn-outline btn-sm" data-action="app-back">' + icon("chevron") + "返回项目管理</button>" +
+      (readonly ? '<button class="btn btn-primary btn-sm" data-action="app-restart">' + icon("refresh") + '重启制作</button>' : "") + '</div>' +
+      '<div class="app-workspace-title"><div><div class="page-title">' + esc(app.company) + '</div><div class="page-sub">' + esc(app.type) + " · " + esc(app.policy) + " · 负责人：" + esc(app.owner) + '</div></div>' +
+      '<div class="app-top-progress"><span>项目进度 ' + appProgress(app) + '%</span><div class="bar"><i style="width:' + appProgress(app) + '%"></i></div>' + topActions + '</div></div>' +
+      '<div class="tabs app-main-tabs">' + tabs + '</div></div>' +
+      (readonly ? '<div class="readonly-banner">' + icon("lock") + '<div><b>项目已归档，只读查看</b><span>当前详情不可继续编辑、调优或修改评分；重启制作后恢复操作。</span></div></div>' : "") +
+      body;
+  }
+
+  function viewEnterpriseFiles(app) {
+    const readonly = appArchived(app);
+    const rows = GQ.enterpriseFiles.map(f =>
+      "<tr><td><b>" + esc(f.name) + '</b><div style="font-size:12px;color:#64748b">' + esc(f.group) + "</div></td><td>" + esc(f.type) + "</td><td>" + esc(f.size) + "</td><td>" + st(f.status) + "</td><td>" + esc(f.note) + "</td>" +
+      '<td style="white-space:nowrap"><span class="link" data-action="material-view" data-name="' + esc(f.name) + '">查看</span> · <span class="link" data-action="app-delete-file" data-id="' + f.id + '">删除</span></td></tr>').join("");
+    return '<div class="grid-2-1 app-section">' +
+      '<div class="card"><div class="card-head"><div><div class="card-title">企业文件资料</div><div class="card-sub">资料已按申报附件、设备证据、淘汰设备证明等目录分类展示</div></div>' +
+      '<div class="page-actions"><button class="btn btn-primary btn-sm" data-action="app-upload"' + (readonly ? " disabled" : "") + '>' + icon("upload") + "上传</button><button class=\"btn btn-outline btn-sm\" data-action=\"app-scan\"" + (readonly ? " disabled" : "") + ">" + icon("spark") + "AI识别</button></div></div>" +
+      '<div class="table-wrap"><table class="table"><thead><tr><th>文件</th><th>类型</th><th>大小</th><th>状态</th><th>识别说明</th><th>操作</th></tr></thead><tbody>' + rows + "</tbody></table></div></div>" +
+      '<div class="card ai-side-panel"><div class="card-head"><div><div class="card-title">Agent 资料识别</div><div class="card-sub">缺失资料、逻辑矛盾与证据链检测</div></div>' + st(state.aiScanDone ? "识别完成" : "待识别") + '</div>' +
+      '<div class="ai-orbit"><span></span><i></i><b>AI</b></div>' +
+      '<div id="app-scan-result">' + (state.aiScanDone ? insightHtml() : '<div class="empty" style="padding:18px">' + icon("spark") + '<div>点击 AI识别 后展示资料缺失与矛盾检测结果</div></div>') + '</div></div></div>';
+  }
+
+  function insightHtml() {
+    const items = GQ.materialInsights.filter(i => !state.resolvedInsights.has(i.id));
+    if (!items.length) return '<div class="empty" style="padding:18px">' + icon("check") + '<div>个人工作清单已清空<br>再次 AI识别会重新按资料现状扫描</div></div>';
+    return items.map(i =>
+      '<div class="ai-insight"><div class="ai-insight-head">' + st(i.level) + '<b>' + esc(i.title) + '</b></div><div>' + esc(i.text) + '</div>' +
+      '<div class="page-actions" style="margin-top:8px"><button class="btn btn-outline btn-sm" data-action="app-resolve-insight" data-id="' + i.id + '">' + icon("check") + '已解决</button></div></div>').join("");
+  }
+
+  function outlineStatus(ch) {
+    if (ch.completeness >= 85) return "资料较完整";
+    if (ch.completeness >= 70) return "需补充";
+    return "资料缺口";
+  }
+
+  function docTopActions(readonly) {
+    return '<div class="doc-top-actions"><button class="btn btn-outline btn-sm" data-action="doc-save-version"' + (readonly ? " disabled" : "") + '>' + icon("clock") + '存档</button>' +
+      '<button class="btn btn-outline btn-sm" data-action="app-history">' + icon("clipboard") + '历史记录</button>' +
+      '<button class="btn btn-outline btn-sm" data-action="doc-export">' + icon("download") + '导出 Word</button>' +
+      '<button class="icon-btn locate-top-btn" title="定位调优" aria-label="定位调优" data-action="app-locate" data-target="选择文书段落进行定位调优"' + (readonly ? " disabled" : "") + '>' + icon("target") + '</button></div>';
+  }
+
+  function aiDocChip() {
+    return '<span class="ai-doc-chip"><i></i>AI实时校验</span>';
+  }
+
+  function viewSmartWriter(app) {
+    const readonly = appArchived(app);
+    const active = GQ.liangxinOutline.find(ch => ch.id === state.activeOutline) || GQ.liangxinOutline[0];
+    const outline = GQ.liangxinOutline.map(ch =>
+      '<button class="outline-row ' + (state.activeOutline === ch.id ? "active" : "") + '" data-action="app-chapter" data-id="' + ch.id + '">' +
+      (ch.missing.length ? '<span class="outline-badge" data-action="app-gap-detail" data-id="' + ch.id + '">' + ch.missing.length + '</span>' : "") +
+      '<div><b>' + esc(ch.title) + '</b><span>' + outlineStatus(ch) + " · 完整度 " + ch.completeness + '%</span></div><div class="mini-bar"><i style="width:' + ch.completeness + '%"></i></div></button>').join("");
+    const gaps = active.missing.length ? active.missing.map(g => '<span class="chip" style="background:#fee2e2;color:#ef4444">' + esc(g) + "</span>").join(" ") : '<span class="chip" style="background:#d1fae5;color:#059669">当前章节资料完整</span>';
+    return '<div class="grid-1-2 app-section writer-layout">' +
+      '<div class="card"><div class="card-head"><div><div class="card-title">两新文书一级目录</div><div class="card-sub">根据参考模板提炼为演示大纲，逐章检查资料完整度</div></div></div>' +
+      '<div class="outline-list">' + outline + '</div>' +
+      '<div class="qa-block" style="margin-top:16px"><div class="qa-block-title">当前章节缺失资料</div><div>' + gaps + '</div></div>' +
+      '<button class="btn btn-primary btn-block" data-action="app-generate-doc"' + (readonly ? " disabled" : "") + '>' + icon("spark") + (state.docGenerated ? "重新生成文书" : "生成文书") + '</button></div>' +
+      '<div class="card writer-doc-card"><div class="card-head"><div><div class="card-title">文书主体内容 ' + aiDocChip() + '</div><div class="card-sub">' + esc(app.shortName) + ' · 国债两新申报书 · ' + (state.docGenerated ? "最新草稿实时缓存" : "待生成") + '</div></div>' + docTopActions(readonly) + '</div>' +
+      '<div id="app-doc-panel">' + (state.docGenerated ? docDraftHtml(app) : docWaitingHtml(active)) + '</div>' + writerBottomChat(readonly) + '</div></div>';
+  }
+
+  function docWaitingHtml(active) {
+    return '<div class="empty">' + icon("file") + '<div>当前选中：' + esc(active.title) + '<br>完整度 ' + active.completeness + '%，可先查看缺失资料，也可直接生成演示文书</div></div>';
+  }
+
+  function sampleReportSections() {
+    return [
+      { title: "第一章 项目总述", text: "本项目围绕既有生产体系中的关键工序设备更新展开，重点淘汰低效、高耗、稳定性不足的旧设备，新增硫化、成型、定型、破胶等先进装备，并配套保温设施和生产数据采集能力。项目建设边界清晰，资金投向集中，改造目标聚焦高端化、智能化、绿色化和本质安全提升。", cite: "参考片段：项目总投入 6000 万元，备案产能年产 3000 万条，建设内容以设备更新和配套提升为主。" },
+      { title: "第二章 公司实施基础", text: "示例企业长期从事轮胎研发、生产和销售，已形成覆盖内外胎生产、质量检测、市场销售和售后服务的经营体系。企业具备较完整的产品系列、较成熟的客户网络和稳定的生产组织能力，现有研发、设备、质量、信息化、安全和财务管理队伍可参与设备选型、安装调试、工艺参数固化、质量验证和绩效跟踪。", cite: "参考片段：项目不重新建立完整工厂体系，而是在现有厂区、公辅条件和生产组织基础上完成关键设备替换。" },
+      { title: "第三章 项目建设内容", text: "轮胎制造过程对材料配比、胶料处理、胎胚成型、定型保持、硫化温压时控制、成品检测和批次追溯均有较高要求。传统低效设备在运行年限、控制精度、能耗水平、维护频次和安全防护方面逐步显现短板，容易造成批次波动、返修返工、能源浪费和现场管理压力。", cite: "参考片段：新增设备有利于把生产经验转化为可记录、可控制、可追溯的生产参数。" },
+      { title: "第四章 投资估算与资金筹措", text: "项目投资主要用于生产装备购置、配套设施完善和数字化管理能力建设。已投入金额、后续付款计划和财务年度计划应与合同履约、设备到货、安装验收和资产入账进度保持一致，形成合同、发票、付款记录、验收资料和财务台账相互印证的资金证明链条。", cite: "参考片段：资金口径需与备案总投入、合同履约和设备到货节点保持一致。" },
+      { title: "第五章 节能降碳与绩效效果", text: "新增设备投用后，项目将在生产效率、质量稳定、能源利用、安全防护和管理精细化方面形成综合效果。硫化设备更新有利于提高温度、压力和时间控制稳定性，成型设备更新有利于提升胎胚尺寸一致性，MES 和数据采集能力能够把设备运行、生产批次、质量检测、仓储流转和异常处置纳入统一记录。", cite: "参考片段：项目可按月汇总产量、能耗、质量和安全数据，为资金审核和后评价提供支撑。" },
+      { title: "第六章 风险控制与附件证明", text: "项目实施过程中，应围绕设备采购、到货、安装调试、试运行、验收和资产入账建立全过程管理台账。新增设备资料包括采购合同、发票、付款记录、技术协议、到货验收记录和资产入账凭证；淘汰设备资料包括旧设备明细、原始采购凭证、处置或报废手续及现场照片。", cite: "参考片段：通过上述资料，项目建设内容、资金支付、设备状态和绩效结果能够形成前后衔接的证明链条。" }
+    ];
+  }
+
+  function docDraftHtml(app) {
+    return '<div class="doc-preview app-doc-preview">' +
+      sampleReportSections().map((ch, idx) => '<section id="doc-sec-sample-' + idx + '" class="' + (state.locatedTarget && state.locatedTarget.includes(ch.title.slice(0, 3)) ? "located" : "") + '">' +
+      '<h3>' + esc(ch.title) + '</h3><p>' + esc(ch.text) + '</p><p class="cite">' + esc(ch.cite) + '</p></section>').join("") +
+      '<div class="app-doc-foot">示例文书节选自设备更新申请书整理稿，并已做演示化改写。未手动存档时，后续微调会覆盖当前草稿。</div></div>';
+  }
+
+  function writerBottomChat(readonly) {
+    return '<div class="writer-bottom-chat"><button class="btn btn-outline btn-sm" data-action="app-reference-file"' + (readonly ? " disabled" : "") + '>' + icon("paperclip") + '选择参考文件</button>' +
+      '<input class="input" id="writer-chat-input" placeholder="输入调优要求，例如：按参考文件补充设备真实性说明，或调整第四章资金口径"' + (readonly ? " disabled" : "") + '>' +
+      '<button class="btn btn-primary" data-action="app-writer-chat"' + (readonly ? " disabled" : "") + '>' + icon("send") + '发送调优</button></div>';
+  }
+
+  function runAppDocGenerate() {
+    const panel = $("#app-doc-panel");
+    if (!panel) return;
+    panel.innerHTML = '<div class="ai-generate"><div class="eval-radar"><span class="eval-ring r1"></span><span class="eval-ring r2"></span><div class="eval-core">' + icon("spark") + '</div></div><div class="eval-step" id="app-gen-step">读取企业资料库</div><div class="eval-progress"><i id="app-gen-bar"></i></div><div class="card-sub">预计等待 38 秒 · 演示加速中</div></div>';
+    const steps = ["读取企业资料库", "匹配两新申报模板", "校验章节资料完整度", "生成文书主体", "标注证据缺口", "写入实时草稿缓存"];
+    let i = 0;
+    const tick = setInterval(() => {
+      i += 1;
+      const s = $("#app-gen-step");
+      const b = $("#app-gen-bar");
+      if (s) s.textContent = steps[Math.min(i, steps.length - 1)];
+      if (b) b.style.width = Math.min(100, (i + 1) * 17) + "%";
+      if (i >= steps.length - 1) {
+        clearInterval(tick);
+        state.docGenerated = true;
+        panel.innerHTML = docDraftHtml(currentApplication());
+        toast("文书已生成，最新草稿已实时缓存", "success");
+      }
+    }, 520);
+  }
+
+  function tuneSimilarityData() {
+    return [
+      { level: "高", chapter: "二、项目建设背景与必要性", target: "设备老化、效率不足、单位能耗偏高", compare: "对比企业A / 对比企业B", similarity: 86, advice: "加入当前企业动力部件精密加工、连续化转运和客户交付约束，避免通用设备更新表述。" },
+      { level: "中", chapter: "三、建设内容与设备更新方案", target: "更新数控加工、检测、抛光、起重等关键设备", compare: "对比企业A", similarity: 72, advice: "补充设备A/B/C的工序位置、产线瓶颈和新增质量追溯能力。" },
+      { level: "中", chapter: "五、节能降碳与安全环保", target: "降低老旧设备维护频次，改善现场安全和能耗管理", compare: "对比企业B", similarity: 68, advice: "加入企业现有能耗基线、预计单件能耗下降和安全联锁改造。" }
+    ];
+  }
+
+  function docEditorHtml(readonly) {
+    return '<textarea class="input doc-edit-area" ' + (readonly ? "readonly" : "") + '>' + sampleReportSections().map(ch => ch.title + "\n" + ch.text).join("\n\n") + '</textarea>';
+  }
+
+  function viewAiTuneV2(app) {
+    const readonly = appArchived(app);
+    const compare = tuneSimilarityData().map((x, i) =>
+      '<div class="similarity-card"><div class="similarity-head"><div>' + st(x.level) + '<b>' + esc(x.chapter) + '</b></div><span>' + x.similarity + '%</span></div>' +
+      '<div class="similarity-meter"><i style="width:' + x.similarity + '%"></i></div><p><b>雷同片段：</b>' + esc(x.target) + '</p><p><b>横向对比：</b>' + esc(x.compare) + '</p>' +
+      '<div class="ai-suggestion">' + icon("spark") + '<span>' + esc(x.advice) + '</span></div><div class="page-actions"><button class="btn btn-outline btn-sm" data-action="app-locate" data-target="' + esc(x.chapter) + '"' + (readonly ? " disabled" : "") + '>' + icon("target") + '定位</button><button class="btn btn-primary btn-sm" data-action="app-tune-apply" data-id="' + i + '"' + (readonly ? " disabled" : "") + '>人工确认修改</button></div></div>').join("");
+    return '<div class="tune-workbench app-section"><div class="card"><div class="card-head"><div><div class="card-title">当前企业文书草稿 ' + aiDocChip() + '</div><div class="card-sub">读取文书智写最新草稿，支持人工手动调整</div></div>' + docTopActions(readonly) + '</div><div class="ai-line"><span></span><b>Agent 正在扫描段落相似度、企业特色缺口和通用化表达</b></div>' + docEditorHtml(readonly) +
+      '<div class="writer-bottom-chat tune-inline-chat"><button class="btn btn-outline btn-sm" data-action="app-reference-file"' + (readonly ? " disabled" : "") + '>' + icon("paperclip") + '选择参考文件</button><input class="input" id="tune-input" placeholder="输入局部调优要求，例如：降低同质化、强化当前企业特色"' + (readonly ? " disabled" : "") + '><button class="btn btn-primary" data-action="app-refine"' + (readonly ? " disabled" : "") + '>' + icon("send") + '微调</button></div></div>' +
+      '<div class="tune-side"><div class="card"><div class="card-head"><div><div class="card-title">项目库横向对比</div><div class="card-sub">同机构文书交叉验证，提示雷同风险</div></div><div class="ai-orbit tiny"><b>AI</b></div></div>' + compare + '</div></div></div>';
+  }
+
+  function scoreProofItems() {
+    return [
+      { id: "p1", level: "必须修改", pos: "四、投资构成与资金筹措", text: "合同、发票、付款回单存在合并付款口径，金额差异需最终说明。", suggest: "授权后补充“差异金额待企业付款说明确认”的限定表述。" },
+      { id: "p2", level: "建议修改", pos: "三、建设内容与设备更新方案", text: "部分设备缺现场照片，设备真实性证明仍不完整。", suggest: "增加设备照片补充清单，并将当前结论标注为待核验。" },
+      { id: "p3", level: "需人工确认", pos: "五、节能降碳与安全环保", text: "节能测算缺少基准年数据，预计降耗比例依据不足。", suggest: "保留节能方向，删除未有依据的精确比例。" },
+      { id: "p4", level: "建议修改", pos: "全文表述", text: "多处使用通用化表达，企业特色与技术改造必要性关联不够强。", suggest: "仅针对提示段落微调，不进行整篇重写。" }
+    ];
+  }
+
+  function viewSmartScoreV2(app) {
+    const readonly = appArchived(app);
+    const proof = scoreProofItems().filter(x => !state.scoreResolved.has(x.id));
+    const proofHtml = proof.length ? proof.map(x =>
+      '<div class="proof-card"><div class="score-issue"><div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' + st(x.level) + '<b>' + esc(x.pos) + '</b></div><p>' + esc(x.text) + '</p><span>建议：' + esc(x.suggest) + '</span></div></div><div class="page-actions"><button class="btn btn-outline btn-sm" data-action="app-score-manual" data-id="' + x.id + '"' + (readonly ? " disabled" : "") + '>' + icon("edit") + '手动修改</button><button class="btn btn-outline btn-sm" data-action="app-score-chat" data-id="' + x.id + '"' + (readonly ? " disabled" : "") + '>' + icon("chat") + '针对提示微调</button><button class="btn btn-primary btn-sm" data-action="app-score-fix" data-id="' + x.id + '"' + (readonly ? " disabled" : "") + '>' + icon("check") + '同意修改</button></div></div>').join("") : '<div class="empty">' + icon("check") + '<div>全文最终校对问题已处理，可导出并归档项目</div></div>';
+    return '<div class="score-workbench app-section"><div class="card writer-doc-card"><div class="card-head"><div><div class="card-title">文书终稿预览 ' + aiDocChip() + '</div><div class="card-sub">用于评分和全文校对的最新草稿</div></div>' + docTopActions(readonly) + '</div><div class="doc-preview app-doc-preview score-doc-preview">' +
+      sampleReportSections().map((ch, idx) => '<section id="score-doc-sec-' + idx + '"><h3>' + esc(ch.title) + '</h3><p>' + esc(ch.text) + '</p><p class="cite">' + esc(ch.cite) + '</p></section>').join("") + '</div></div>' +
+      '<div class="score-side"><div class="card score-ai-card ' + (state.scoreCollapsed ? "collapsed" : "") + '"><div class="card-head"><div><div class="card-title">AI评分</div><div class="card-sub">可收起查看，综合得分 88</div></div><button class="btn btn-outline btn-sm" data-action="app-toggle-score">' + (state.scoreCollapsed ? "展开" : "收起") + '</button></div>' +
+      (state.scoreCollapsed ? "" : '<div class="score-hero compact"><div class="score-ring-wrap">' + ring(88, "#1a73e8") + '<div class="ai-scan-beam"></div></div><div class="score-report"><h3>综合评估报告</h3><p>当前文书综合得分 88 分，政策契合度和格式规范表现较好；短板集中在材料完整性、资金口径一致性、节能测算依据和企业特色表达。</p></div></div><div class="chart-bars compact"><div><span>政策契合</span><i style="width:92%"></i><b>92</b></div><div><span>材料完整</span><i style="width:78%"></i><b>78</b></div><div><span>证据支撑</span><i style="width:85%"></i><b>85</b></div><div><span>行文逻辑</span><i style="width:88%"></i><b>88</b></div><div><span>格式规范</span><i style="width:96%"></i><b>96</b></div></div>') + '</div>' +
+      '<div class="card score-proof-panel"><div class="card-head"><div><div class="card-title">AI校对</div><div class="card-sub">建议修改 ' + proof.length + ' 条 · 固定高度滚动</div></div><div class="ai-orbit tiny"><b>AI</b></div></div><div class="ai-line"><span></span><b>校对光标正在锁定逻辑错误、前后矛盾和数据口径风险</b></div><div class="proof-scroll">' + proofHtml + '</div></div></div></div>';
+  }
+
   /* ===== 答辩准备 ===== */
   function viewPPT() {
     const slides = GQ.ppt.slides.map((s, i) =>
@@ -1094,11 +1337,10 @@
   }
 
   function doLogin() {
-    const account = $("#login-account").value.trim();
-    const pwd = $("#login-password").value;
-    const role = $("#login-role").value;
+    const account = $("#login-account").value.trim() || "pm01";
+    const pwd = $("#login-password").value || "demo";
+    const role = $("#login-role").value || "申报顾问";
     const u = Object.assign({}, GQ.users[account] || { name: account === "admin" ? "赵敏" : "顾晓岚", dept: "项目部" }, { role });
-    if (!pwd) { toast("请输入密码", "warning"); return; }
     const btn = $("#login-btn");
     btn.disabled = true;
     btn.innerHTML = '<span class="spin" style="width:15px;height:15px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin .8s linear infinite"></span> 正在登录…';
@@ -1106,6 +1348,7 @@
       state.user = u;
       $("#login-view").classList.add("hidden");
       $("#app-shell").classList.remove("hidden");
+      document.body.classList.remove("login-mode");
       $("#side-user-name").textContent = u.name;
       $("#side-user-role").textContent = u.role;
       $("#top-user-name").textContent = u.name;
@@ -1148,6 +1391,150 @@
   /* 动作分发（视图、弹窗、抽屉共用） */
   function handleAction(action, el) {
     switch (action) {
+      case "app-open":
+        state.applicationId = el.dataset.id || "mkd-2026";
+        state.applicationTab = "files";
+        renderView();
+        break;
+      case "app-back":
+        state.applicationId = null;
+        state.applicationTab = "files";
+        renderView();
+        break;
+      case "app-tab":
+        state.applicationTab = el.dataset.tab || "files";
+        renderView();
+        break;
+      case "app-toggle-alert":
+        state.alertCollapsed = !state.alertCollapsed;
+        renderView();
+        break;
+      case "app-new-project":
+        modal("新增企业项目", "创建后进入项目管理，可通过文件夹目录索引上传分类资料",
+          '<div class="form-grid"><label class="field"><span>企业名称</span><input class="input" placeholder="请输入企业名称"></label>' +
+          '<label class="field"><span>申报项目类型</span><select class="select"><option>国债两新</option><option>设备更新</option><option>技术改造</option></select></label></div>' +
+          '<label class="field" style="margin-top:14px"><span>项目描述</span><textarea class="input" rows="4" placeholder="说明项目建设内容、设备更新范围、申报目标等"></textarea></label>' +
+          '<div class="qa-block" style="margin-top:14px"><div class="qa-block-title">企业资料上传</div><div class="folder-index-upload">' + icon("folder") + '<div><b>文件夹目录索引上传</b><span>支持按申报附件、设备合同、发票、付款回单、设备照片等目录识别并分类入库</span></div></div></div>',
+          '<button class="btn btn-outline" data-close="modal">取消</button><button class="btn btn-primary" data-action="app-new-project-save">创建项目</button>');
+        break;
+      case "app-new-project-save":
+        closeModal();
+        toast("企业项目已创建，资料目录索引已进入解析队列（演示）", "success");
+        break;
+      case "app-upload":
+        modal("上传企业资料", "支持合同、发票、付款回单、设备照片、申报附件等资料批量导入",
+          '<div class="folder-index-upload" style="margin-top:8px">' + icon("upload") + '<div><b>点击选择企业资料文件夹</b><span>系统将按目录索引自动分类合同、发票、付款回单与设备照片</span></div></div>',
+          '<button class="btn btn-outline" data-close="modal">取消</button><button class="btn btn-primary" data-action="app-upload-ok">导入并识别</button>');
+        break;
+      case "app-upload-ok":
+        closeModal();
+        state.aiScanDone = true;
+        toast("企业资料已导入，Agent 已完成初步识别", "success");
+        renderView();
+        break;
+      case "app-scan": {
+        const box = $("#app-scan-result");
+        state.resolvedInsights = new Set();
+        if (box) runFlow(box, ["扫描文件目录", "抽取合同/发票/照片元数据", "比对设备索引表", "识别缺失资料与逻辑矛盾"], insightHtml());
+        state.aiScanDone = true;
+        break;
+      }
+      case "app-resolve-insight": {
+        state.resolvedInsights.add(el.dataset.id);
+        const panel = $("#app-scan-result");
+        if (panel) panel.innerHTML = insightHtml();
+        toast("已从个人工作清单移除；下次 AI 识别会按资料现状重新判断", "success");
+        break;
+      }
+      case "app-delete-file":
+        toast("文件已从当前资料包移除（演示，不删除本地文件）", "success");
+        break;
+      case "app-chapter":
+        state.activeOutline = el.dataset.id || "base";
+        renderView();
+        break;
+      case "app-gap-detail": {
+        const ch = GQ.liangxinOutline.find(x => x.id === el.dataset.id);
+        if (!ch) break;
+        modal("缺失资料", ch.title,
+          ch.missing.length ? '<div class="qa-block"><div class="qa-block-title">需补充资料</div>' + ch.missing.map(g => '<div class="qa-text" style="margin-bottom:8px">' + esc(g) + '</div>').join("") + '</div>' : '<div class="empty">' + icon("check") + '<div>当前章节资料完整</div></div>',
+          '<button class="btn btn-outline" data-close="modal">关闭</button>');
+        break;
+      }
+      case "app-generate-doc":
+        runAppDocGenerate();
+        break;
+      case "app-reference-file":
+        modal("选择参考文件", "调优对话将优先参考所选模板、政策或企业证明材料",
+          '<div class="table-wrap"><table class="table"><thead><tr><th>参考文件</th><th>用途</th><th>状态</th></tr></thead><tbody><tr><td>两新申报模板_脱敏示例.docx</td><td>章节结构与行文口径</td><td>' + st("已选择") + '</td></tr><tr><td>设备更新政策摘录.pdf</td><td>政策依据</td><td>' + st("可选择") + '</td></tr><tr><td>设备证据索引表_脱敏示例.xlsx</td><td>设备与金额校验</td><td>' + st("可选择") + '</td></tr></tbody></table></div>',
+          '<button class="btn btn-outline" data-close="modal">取消</button><button class="btn btn-primary" data-close="modal">确认选择</button>');
+        break;
+      case "app-history": {
+        const rows = [{ name: "最新草稿记录", time: "2026-08-03 09:18", note: state.docRefined ? "已覆盖最新调优结果" : "实时缓存，未生成新版本" }, { name: "存档 V1", time: "2026-08-02 17:42", note: "材料核验前初稿留存" }].concat(state.appSnapshots);
+        modal("历史记录", "查看当前文书的所有存档和最新草稿记录",
+          '<div class="table-wrap"><table class="table"><thead><tr><th>记录名称</th><th>时间</th><th>说明</th><th>操作</th></tr></thead><tbody>' + rows.map(r => '<tr><td><b>' + esc(r.name) + '</b></td><td>' + esc(r.time) + '</td><td>' + esc(r.note) + '</td><td><span class="link">查看</span></td></tr>').join("") + '</tbody></table></div>',
+          '<button class="btn btn-outline" data-close="modal">关闭</button>');
+        break;
+      }
+      case "app-writer-chat":
+        toast("已按底部对话要求生成局部调优建议，并等待人工确认（演示）", "success");
+        break;
+      case "app-locate":
+        state.locatedTarget = el.dataset.target || "当前定位内容";
+        modal("定位调优", state.locatedTarget,
+          '<div class="qa-block"><div class="qa-block-title">已定位内容</div><div class="qa-text">' + esc(state.locatedTarget) + '</div></div>' +
+          '<label class="field" style="margin-top:14px"><span>修改要求</span><textarea class="input" rows="5" placeholder="写下这里要怎么改，例如：补充设备真实性说明、调整金额口径、强化企业特色表述"></textarea></label>' +
+          '<div class="agent-steps" style="margin-top:14px"><span class="spin"></span><span class="flow-text">Agent 将仅对当前定位段落生成修改建议，等待人工确认后覆盖当前草稿</span></div>',
+          '<button class="btn btn-outline" data-close="modal">取消</button><button class="btn btn-primary" data-action="app-locate-apply">应用修改</button>');
+        break;
+      case "app-locate-apply":
+        closeModal();
+        state.docRefined = true;
+        toast("定位内容已按人工确认应用，当前最新草稿已覆盖更新", "success");
+        break;
+      case "app-tune-apply":
+        state.docRefined = true;
+        toast("已确认同质化修正建议，并覆盖最新草稿", "success");
+        renderView();
+        break;
+      case "app-snapshot":
+        state.appSnapshots.unshift({ name: "手动快照 V" + (state.appSnapshots.length + 2), time: "2026-08-03 09:" + String(20 + state.appSnapshots.length).padStart(2, "0"), note: "人工保存的差异化调优版本" });
+        toast("已保存手动快照", "success");
+        renderView();
+        break;
+      case "app-score-fix":
+        state.scoreResolved.add(el.dataset.id);
+        toast("已人工授权修改该提示，当前草稿已覆盖更新", "success");
+        renderView();
+        break;
+      case "app-score-manual":
+        modal("手动修改", "仅修改当前提示项，不开放全文对话式重写",
+          '<textarea class="input" rows="6" placeholder="输入人工修改后的表述"></textarea>',
+          '<button class="btn btn-outline" data-close="modal">取消</button><button class="btn btn-primary" data-action="app-score-fix" data-id="' + el.dataset.id + '">保存修改</button>');
+        break;
+      case "app-score-chat":
+        modal("针对提示微调", "Agent 只围绕当前提示生成候选改写",
+          '<div class="chat-box compact-chat"><div class="msg agent"><div class="msg-avatar">校</div><div class="msg-body">请描述这条提示希望如何处理，我会生成局部候选文本，等待人工授权。</div></div></div><div class="chat-input"><input class="input" placeholder="例如：弱化精确比例，改为待补充测算依据"><button class="btn btn-primary" data-action="app-score-fix" data-id="' + el.dataset.id + '">' + icon("check") + '授权应用</button></div>',
+          '<button class="btn btn-outline" data-close="modal">关闭</button>');
+        break;
+      case "app-toggle-score":
+        state.scoreCollapsed = !state.scoreCollapsed;
+        renderView();
+        break;
+      case "app-export-doc":
+        toast("文档已导出（演示）", "success");
+        break;
+      case "app-archive":
+        state.archivedApps.add(currentApplication().id);
+        toast("项目已归档，首页进度更新为 100%", "success");
+        renderView();
+        break;
+      case "app-restart":
+        state.archivedApps.delete(currentApplication().id);
+        state.applicationTab = "writer";
+        toast("项目已重启制作，恢复可操作状态", "success");
+        renderView();
+        break;
       case "todo-go": go("#/qa"); break;
       case "kb-view":
         drawer("文档详情", el.dataset.id,
@@ -1240,6 +1627,13 @@
       case "industry-add": industryModal(null); break;
       case "industry-save": closeModal(); toast("产业配置已保存", "success"); break;
       case "industry-toggle": toast(el.dataset.id === "equip" ? "高端装备产业已启动" : "已暂停抓取（演示）", "success"); break;
+      case "industry-open": {
+        const ind = GQ.industries.find(x => x.id === el.dataset.id);
+        state.industryName = ind ? ind.name : "全部";
+        state.industryType = "全部";
+        go("#/industry-timeline");
+        break;
+      }
       case "news-fav": {
         const id = +el.dataset.id;
         state.newsFav.has(id) ? state.newsFav.delete(id) : state.newsFav.add(id);
@@ -1333,7 +1727,7 @@
         toast("已确认立项并写入决策记录，立项人：" + who, "success");
         break;
       }
-      case "eval-interview": go("#/interview"); break;
+      case "eval-interview": toast("已在项目评估结果中生成待核实问题清单（演示）", "success"); break;
       case "eval-export": toast("评估报告已导出（演示）", "success"); break;
       case "interview-run": runInterview(); break;
       case "interview-export": toast("访谈简报已按模板导出（演示）", "success"); break;
@@ -1432,7 +1826,8 @@
       case "doc-save-version": {
         const v = state.docVersions.length + 1;
         state.docVersions.push({ label: "v1." + v, time: "2026-08-02 15:30", note: "文书版本已保留，可继续调优" });
-        toast("版本 v1." + v + " 已保留并加入版本历史", "success");
+        state.appSnapshots.unshift({ name: "存档 V" + (state.appSnapshots.length + 2), time: "2026-08-03 09:" + String(24 + state.appSnapshots.length).padStart(2, "0"), note: "人工存档版本，可在历史记录查看" });
+        toast("已存档并加入历史记录", "success");
         break;
       }
       case "doc-review": runReviewerEffect(); break;
@@ -1498,7 +1893,8 @@
     if (!el) return;
     const action = el.dataset.action;
     const route = el.dataset.route;
-    if (route) { go(route); return; }
+    if (route) { e.stopPropagation(); go(route); return; }
+    e.stopPropagation();
     handleAction(action, el);
   });
 
@@ -1533,8 +1929,14 @@
   /* 全局事件：侧边栏、弹窗、抽屉 */
   document.addEventListener("click", e => {
     const closer = e.target.closest("[data-close]");
-    if (closer) { if (closer.dataset.close === "modal") closeModal(); else closeDrawer(); }
+    if (closer) { if (closer.dataset.close === "modal") closeModal(); else closeDrawer(); return; }
     const inView = e.target.closest("#view");
+    if (inView) {
+      const routeEl = e.target.closest("[data-route]");
+      if (routeEl && inView.contains(routeEl)) { go(routeEl.dataset.route); return; }
+      const actEl = e.target.closest("[data-action]");
+      if (actEl && inView.contains(actEl)) { handleAction(actEl.dataset.action, actEl); return; }
+    }
     if (!inView) {
       const routeEl = e.target.closest("[data-route]");
       if (routeEl) {
@@ -1582,9 +1984,10 @@
       closeModal();
       $("#app-shell").classList.add("hidden");
       $("#login-view").classList.remove("hidden");
+      document.body.classList.add("login-mode");
       const btn = $("#login-btn");
       btn.disabled = false;
-      btn.textContent = "登录系统";
+      btn.innerHTML = '<span>登录系统</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
       state.route = "home";
       if (location.hash) history.replaceState(null, "", location.pathname + location.search);
     }
@@ -1593,6 +1996,11 @@
   $("#menu-btn").addEventListener("click", () => $("#sidebar").classList.toggle("open"));
   $("#search-btn").addEventListener("click", () => openSearch($("#global-search").value.trim()));
   $("#global-search").addEventListener("keydown", e => { if (e.key === "Enter") openSearch(e.target.value.trim()); });
+  const aiOrb = $("#ai-orb");
+  if (aiOrb) aiOrb.addEventListener("click", () => {
+    location.hash = "#/qa";
+    toast("智库助手已就绪，可输入问题或需求", "info");
+  });
 
   window.addEventListener("hashchange", () => {
     if ($("#app-shell").classList.contains("hidden")) return;
@@ -1602,6 +2010,7 @@
   });
 
   /* 初始化 */
+  document.body.classList.add("login-mode");
   renderNotifications();
   bindLogin();
   const params = new URLSearchParams(location.search);
