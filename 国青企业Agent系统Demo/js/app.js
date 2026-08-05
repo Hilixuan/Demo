@@ -48,7 +48,8 @@
     accounts: GQ.accounts.slice(),
     security: GQ.security.map(s => Object.assign({}, s)),
     customRoles: [],
-    editRoleIdx: -1
+    editRoleIdx: -1,
+    candidateIds: new Set(["C01", "C02", "C03"])
   };
 
   /* ===== 图标 ===== */
@@ -368,7 +369,7 @@
     return pageHead("知识库管理 · " + lib.name, current.name + " 项目空间 · 支持分区内容维护与文件夹管理",
       '<button class="btn btn-outline" data-action="kb-back">' + icon("chevron") + "返回分区</button>" +
       '<button class="btn btn-outline" data-action="kb-new-folder">' + icon("folder") + "新建文件夹</button>" +
-      '<button class="btn btn-primary" data-action="kb-upload">' + icon("upload") + "上传文件</button>") +
+      '<button class="btn btn-primary" data-action="kb-upload">' + icon("upload") + "上传资料</button>") +
       '<div class="grid-2-1 section"><div class="card"><div class="card-head"><div><div class="card-title">文件夹</div><div class="card-sub">点击文件夹查看该目录下的最新数据</div></div>' +
       (lib.locked ? '<span class="tag tag-blue tag-plain">' + icon("lock") + "已加密</span>" : "") + "</div>" +
       '<div class="folder-row">' + folders + "</div></div>" +
@@ -383,12 +384,12 @@
   function viewQA() {
     const convs = GQ.qaChats.map(c =>
       '<button class="qa-conv' + (state.qaConv === c.id ? " active" : "") + '" data-action="qa-conv" data-id="' + c.id + '">' +
-      '<div class="qa-conv-ico">' + icon("chat") + '</div><div class="qa-conv-meta"><b>' + esc(c.title) + '</b><span>' + esc(c.project) + " · " + esc(c.time) + " · " + c.msgs + " 条</span></div></button>").join("");
+      '<div class="qa-conv-meta"><b>' + esc(c.title) + "</b></div></button>").join("");
     const suggests = GQ.qaSuggestions.map(s => '<button class="suggest-chip" data-action="qa-suggest" data-q="' + esc(s) + '">' + esc(s) + "</button>").join("");
     return pageHead("AI智库", "类智能体对话界面：左侧按项目展示对话记录并可发起新对话，右侧进行知识问答，回答带引用来源并区分本地/外部依据。") +
       '<div class="qa-layout"><div class="card qa-side">' +
-      '<div class="card-head"><div><div class="card-title">对话记录</div><div class="card-sub">按项目分区管理</div></div></div>' +
-      '<button class="btn btn-primary btn-block" style="margin-bottom:12px" data-action="qa-new">' + icon("plus") + "发起新对话</button>" +
+      '<div class="card-head compact-head"><div><div class="card-title">对话记录</div></div></div>' +
+      '<button class="btn btn-primary btn-block qa-new-btn" data-action="qa-new">' + icon("plus") + "新对话</button>" +
       '<div class="qa-conv-list">' + convs + "</div></div>" +
       '<div class="card qa-main"><div class="card-head">' +
       '<div style="display:flex;align-items:center;gap:12px"><div class="ai-writer-logo">' + icon("spark") + '</div><div><div class="card-title">AI智库 · 智库对话</div><div class="card-sub">权限校验 → 本地检索 → 引用回答 → 建议动作</div></div></div>' +
@@ -605,31 +606,27 @@
   }
 
   function viewCompanies() {
-    const rows = companyFiltered().map(c =>
+    const recommended = companyFiltered().slice(0, 3);
+    const candidates = GQ.companies.filter(c => state.candidateIds.has(c.id));
+    const filterChips = ["高端装备", "新能源电池", "技术改造", "国债两新", "设备购置投资占比高", "在建/备案项目", "投资额 500 万以上", "近三年信用正常", "材料证据较完整"];
+    const recommendRows = recommended.map(c =>
+      '<div class="agent-company-row"><div><b>' + esc(c.name) + '</b><span>' + esc(c.region) + " / " + esc(c.industry) + " · " + esc(c.projectType) + " · 投资额 " + c.invest.toLocaleString() + " 万元</span></div>" +
+      '<div class="agent-company-score"><b>' + c.score + '</b><span>匹配分</span></div><div class="page-actions"><button class="btn btn-outline btn-sm" data-action="company-view" data-id="' + c.id + '">查看详情</button>' +
+      '<button class="btn btn-primary btn-sm" data-action="company-add-candidate" data-id="' + c.id + '">' + (state.candidateIds.has(c.id) ? "已加入" : "加入候选") + "</button></div></div>").join("");
+    const candidateRows = candidates.map(c =>
       "<tr><td><b>" + esc(c.name) + '</b><div style="font-size:12px;color:#64748b">' + c.id + "</div></td>" +
       "<td>" + esc(c.region) + " / " + esc(c.industry) + "</td><td>" + esc(c.projectType) + "</td>" +
       '<td class="num">' + c.invest.toLocaleString() + "</td><td>" + st(c.status) + "</td>" +
-      '<td style="min-width:150px"><div style="display:flex;align-items:center;gap:8px"><b class="num">' + c.score + "</b><div class=\"bar\" style=\"flex:1\"><i style=\"width:" + c.score + "%\"></i></div></div></td>" +
-      "<td>" + st(c.risk + "风险") + "</td><td>" + esc(c.brief) + "</td><td>" + esc(c.evidence) + "</td>" +
-      '<td style="white-space:nowrap"><span class="link" data-action="company-view" data-id="' + c.id + '">画像</span> · ' +
-      '<span class="link" data-action="company-eval" data-id="' + c.id + '">评估</span> · ' +
-      '<span class="link" data-action="company-follow" data-id="' + c.id + '">' + (c.follow ? "已跟进" : "转跟进") + "</span></td></tr>").join("");
-    const high = GQ.companies.filter(c => c.score >= 85).length;
-    return pageHead("企业筛选", "补全企业画像，按区域、行业、投资额与政策方向测算匹配度，输出候选清单。") +
-      '<div class="notice-banner">' + icon("database") + '<span>企业项目备案清单：默认选中知识库的《企业项目备案清单》数据全局统一，使用人可修改，修改后其他人可见。</span></div>' +
-      '<div class="grid-3 section">' +
-      '<div class="kpi"><div class="kpi-ico">' + icon("users") + '</div><div class="kpi-meta"><div class="kpi-label">候选企业</div><div class="kpi-value">' + GQ.companies.length + "</div></div></div>" +
-      '<div class="kpi"><div class="kpi-ico">' + icon("target") + '</div><div class="kpi-meta"><div class="kpi-label">高匹配（≥85）</div><div class="kpi-value">' + high + "</div></div></div>" +
-      '<div class="kpi"><div class="kpi-ico">' + icon("alert") + '</div><div class="kpi-meta"><div class="kpi-label">存在风险提示</div><div class="kpi-value">6</div></div></div></div>' +
-      '<div class="filter-bar">' +
-      '<div class="field"><span>区域</span><select class="select"><option>全部</option><option>苏州</option><option>常州</option><option>南京</option><option>杭州</option></select></div>' +
-      '<div class="field"><span>行业</span><select class="select"><option>全部</option><option>高端装备</option><option>新能源电池</option><option>化工新材料</option><option>生物医药</option></select></div>' +
-      '<div class="field"><span>项目类型</span><select class="select"><option>全部</option><option>技术改造</option><option>新建</option><option>技改扩建</option></select></div>' +
-      '<div class="field"><span>最低匹配分</span><select class="select"><option>不限</option><option>≥ 70</option><option>≥ 80</option><option>≥ 90</option></select></div>' +
-      '<div class="field"><span>政策方向</span><select class="select"><option>设备更新与技改</option><option>两新专项</option><option>专项资金</option></select></div>' +
-      '<button class="btn btn-primary" data-action="company-filter">查询</button><button class="btn btn-outline" data-action="company-reset">重置</button></div>' +
-      '<div class="card"><div class="card-head"><div><div class="card-title">企业候选清单</div><div class="card-sub">评分包含区域适配、行业契合、项目类型、投资规模与政策方向五个维度</div></div></div>' +
-      '<div class="table-wrap"><table class="table"><thead><tr><th>企业</th><th>区域/行业</th><th>项目类型</th><th>投资额(万元)</th><th>建设状态</th><th>匹配评分</th><th>风险</th><th>画像摘要</th><th>证据来源</th><th>操作</th></tr></thead><tbody>' + rows + "</tbody></table></div></div>";
+      '<td style="min-width:150px"><div style="display:flex;align-items:center;gap:8px"><b class="num">' + c.score + '</b><div class="bar" style="flex:1"><i style="width:' + c.score + '%"></i></div></div></td>' +
+      "<td>" + st(c.risk + "风险") + "</td><td>" + esc(c.evidence) + "</td>" +
+      '<td style="white-space:nowrap"><span class="link" data-action="company-view" data-id="' + c.id + '">查看详情</span> · <span class="link" data-action="company-eval" data-id="' + c.id + '">评估</span></td></tr>').join("");
+    return pageHead("企业筛选", "通过对话与固定条件组合筛选国债两新潜在申报企业，Agent 返回推荐清单并加入候选。") +
+      '<div class="company-agent-panel card section"><div class="card-head"><div style="display:flex;align-items:center;gap:12px"><div class="ai-writer-logo">' + icon("spark") + '</div><div><div class="card-title">企业筛选 Agent</div><div class="card-sub">固定筛选条件 + 对话问答，面向国债两新企业筛选标准</div></div></div><span class="chip chip-blue">推荐 ' + recommended.length + ' 家</span></div>' +
+      '<div class="company-filter-chips">' + filterChips.map(x => '<button class="filter-pill" data-action="company-filter">' + esc(x) + "</button>").join("") + '</div>' +
+      '<div class="chat-input company-agent-input"><textarea class="input" rows="2" placeholder="输入筛选要求，例如：筛选设备更新方向、在建项目、投资额较高且证据链较完整的企业"></textarea><button class="qa-send-btn" data-action="company-filter" title="筛选" aria-label="筛选">' + icon("send") + '</button></div>' +
+      '<div class="ai-line"><span></span><b>Agent 已结合行业、项目类型、建设状态、投资规模和政策方向返回企业清单</b></div><div class="agent-company-list">' + recommendRows + "</div></div>" +
+      '<div class="card"><div class="card-head"><div><div class="card-title">已加入候选的企业清单</div><div class="card-sub">点击“评估”进入项目评估页面，继续完成立项判断</div></div><span class="chip chip-blue">候选 ' + candidates.length + ' 家</span></div>' +
+      '<div class="table-wrap"><table class="table"><thead><tr><th>企业</th><th>区域/行业</th><th>项目类型</th><th>投资额(万元)</th><th>建设状态</th><th>匹配评分</th><th>风险</th><th>证据来源</th><th>操作</th></tr></thead><tbody>' + candidateRows + "</tbody></table></div></div>";
   }
 
   function companyDrawer(id) {
@@ -714,12 +711,7 @@
       '<div class="page-actions"><button class="btn btn-primary" data-action="eval-confirm">' + icon("check") + "人工确认立项</button>" +
       '<button class="btn btn-outline" data-action="eval-interview">' + icon("chat") + "生成待核实问题</button>" +
       '<button class="btn btn-outline" data-action="eval-export">' + icon("download") + "导出报告</button></div>";
-    const reportHtml =
-      '<div class="doc-preview"><h3>' + esc(c.name) + " · 项目评估分析报告</h3>" +
-      '<p><b>一、评估结论</b>：' + esc(r.level) + "，综合评分 " + r.score + " 分。<span class=\"cite\">[依据：政策条件逐项匹配结果]</span></p>" +
-      '<p><b>二、政策契合分析</b>：项目投资与设备购置占比满足专项门槛，属于政策鼓励方向。<span class="cite">[依据：2026年工业领域设备更新实施方案 P12]</span></p>' +
-      '<p><b>三、风险与缺口</b>：审计报告与开工证明待补充，环评批复需核实。<span class="cite">[依据：材料比对 QC-20260801-03]</span></p>' +
-      '<p><b>四、建议</b>：补齐材料后建议申报，立项决策由人工确认。</p></div>';
+    const reportHtml = evalReportHtml(c, r);
     runEvalAnalysis(box,
       '<div class="tabs" style="margin-bottom:14px"><button class="tab active" data-action="eval-tab" data-mode="result">评估结果</button><button class="tab" data-action="eval-tab" data-mode="report">分析报告</button></div>' +
       '<div id="eval-result-view">' + resultHtml + "</div>" +
@@ -1184,7 +1176,60 @@
       '<div class="ai-suggestion">' + icon("spark") + '<span>' + esc(x.advice) + '</span></div><div class="page-actions"><button class="btn btn-outline btn-sm" data-action="app-locate" data-target="' + esc(x.chapter) + '"' + (readonly ? " disabled" : "") + '>' + icon("target") + '定位</button><button class="btn btn-primary btn-sm" data-action="app-tune-apply" data-id="' + i + '"' + (readonly ? " disabled" : "") + '>人工确认修改</button></div></div>').join("");
     return '<div class="tune-workbench app-section"><div class="card"><div class="card-head"><div><div class="card-title">当前企业文书草稿 ' + aiDocChip() + '</div><div class="card-sub">读取文书智写最新草稿，支持人工手动调整</div></div>' + docTopActions(readonly) + '</div><div class="ai-line"><span></span><b>Agent 正在扫描段落相似度、企业特色缺口和通用化表达</b></div>' + docEditorHtml(readonly) +
       '<div class="writer-bottom-chat tune-inline-chat"><button class="btn btn-outline btn-sm" data-action="app-reference-file"' + (readonly ? " disabled" : "") + '>' + icon("paperclip") + '选择参考文件</button><input class="input" id="tune-input" placeholder="输入局部调优要求，例如：降低同质化、强化当前企业特色"' + (readonly ? " disabled" : "") + '><button class="btn btn-primary" data-action="app-refine"' + (readonly ? " disabled" : "") + '>' + icon("send") + '微调</button></div></div>' +
-      '<div class="tune-side"><div class="card"><div class="card-head"><div><div class="card-title">项目库横向对比</div><div class="card-sub">同机构文书交叉验证，提示雷同风险</div></div><div class="ai-orbit tiny"><b>AI</b></div></div>' + compare + '</div></div></div>';
+      '<div class="tune-side"><div class="card"><div class="card-head"><div><div class="card-title">项目库横向对比</div><div class="card-sub">先从知识库「企业资料库」多选文本，再进行同机构文书交叉验证</div></div><div class="ai-orbit tiny"><b>AI</b></div></div>' +
+      '<button class="btn btn-outline btn-block compare-select-btn" data-action="app-select-compare-text"' + (readonly ? " disabled" : "") + '>' + icon("database") + '选择企业资料库文本</button>' +
+      '<div class="compare-source-note"><b>已选文本：</b>企业资料库 / 历史申报文书 / 设备更新类章节片段 3 条</div>' + compare + '</div></div></div>';
+  }
+
+  function maskCompanyForReport(c) {
+    const map = {
+      "高端装备": "华东某智能装备企业",
+      "新能源电池": "华东某新能源材料企业",
+      "化工新材料": "华东某新材料企业",
+      "生物医药": "华东某生物医药企业"
+    };
+    return map[c.industry] || "华东某制造业企业";
+  }
+
+  function evalReportHtml(c, r) {
+    const masked = maskCompanyForReport(c);
+    const area = c.region ? c.region + "及周边产业集聚区" : "华东区域产业集聚区";
+    const projectName = c.projectType + "与设备更新项目";
+    const implementer = masked + "（脱敏）";
+    const score = r.score || c.score;
+    const deviceInvest = Math.round((c.invest || 8600) * 0.72);
+    const gapText = (r.gaps || []).join("、") || "审计报告、开工证明等材料需进一步核验";
+    return '<div class="doc-preview eval-report-scroll"><article class="eval-report-paper">' +
+      '<h2 class="eval-report-title">中央预算内资金申报初步评估建议</h2>' +
+      '<p class="eval-report-intro">在充分了解' + esc(masked) + '公开信息、项目备案资料及现有申报材料后，申报评估 Agent 对其拟申报项目进行了初步评估。鉴于当前详细财务资料和部分佐证文件仍需补充，本报告仅作为申报可行性研判与后续尽调清单参考。</p>' +
+      '<table class="eval-report-table eval-report-meta"><tbody>' +
+      '<tr><th>企业简称</th><td>' + esc(masked) + '</td><th>所在区域</th><td>' + esc(area) + '</td></tr>' +
+      '<tr><th>所属行业</th><td>' + esc(c.industry) + '</td><th>项目类型</th><td>' + esc(c.projectType) + '</td></tr>' +
+      '<tr><th>建设状态</th><td>' + esc(c.status) + '</td><th>初步评分</th><td>' + score + ' 分</td></tr>' +
+      '</tbody></table>' +
+      '<section class="eval-report-section"><h4>一、企业简介</h4>' +
+      '<p>' + esc(masked) + '位于' + esc(area) + '，主营业务聚焦' + esc(c.industry) + '相关产品研发、生产与配套服务。根据现有企业画像和公开资料，该企业具备较稳定的生产经营基础，项目方向与区域产业链补链、强链和设备更新政策导向具有一定匹配度。</p>' +
+      '<p>目前可见资料显示，企业具备项目备案、设备购置计划及部分投资凭证，后续仍需结合审计报告、完税证明、设备合同发票和项目开工资料进一步核验其申报主体资格与财务承载能力。</p>' +
+      '</section>' +
+      '<section class="eval-report-section"><h4>二、企业财务状况</h4>' +
+      '<p>受限于当前资料完整度，财务评估以企业提供的摘要信息和知识库材料为基础。初步判断企业投资规模与设备购置金额达到政策申报门槛，但收入规模、资产负债情况及现金流稳定性仍需通过最新年度审计报告、银行流水或授信文件补充确认。</p>' +
+      '<p class="eval-report-note">需重点补充：' + esc(gapText) + '。低置信结论应由项目经理或财务复核人员进行人工确认。</p>' +
+      '</section>' +
+      '<section class="eval-report-section"><h4>三、企业新建项目情况</h4>' +
+      '<table class="eval-report-table"><thead><tr><th>建设地点</th><th>项目名称</th><th>实施单位</th><th>项目介绍</th><th>项目投资/万元</th><th>备注</th></tr></thead><tbody>' +
+      '<tr><td>' + esc(area) + '</td><td>' + esc(projectName) + '</td><td>' + esc(implementer) + '</td><td>' + esc(c.brief) + '。项目拟通过关键设备购置、产线改造和数字化管理能力提升，改善生产效率、质量稳定性与能耗水平。</td><td>' + esc(String(c.invest || 0)) + '</td><td>设备购置约 ' + esc(String(deviceInvest)) + ' 万元，需补齐合同、发票及付款凭证口径。</td></tr>' +
+      '</tbody></table>' +
+      '<p>从项目建设内容看，该项目与设备更新、技术改造和制造业高质量发展方向具有较强关联；但申报材料中涉及建设进度、设备真实性、投资支付闭环的证据链仍需进一步固化。</p>' +
+      '</section>' +
+      '<section class="eval-report-section"><h4>四、产业发展现状与趋势分析</h4>' +
+      '<p>' + esc(c.industry) + '领域当前呈现智能化、绿色化和国产化替代并行推进的趋势。政策侧持续鼓励企业以先进设备更新带动产能结构优化，以数字化系统提升生产组织效率，并对节能降耗、质量追溯和安全生产提出更高要求。</p>' +
+      '<p>结合项目描述，企业拟投设备及配套系统能够支撑关键工序效率提升，对区域产业链稳定和企业产品竞争力提升具备积极意义，建议在正式申报文本中进一步强化技术先进性、设备必要性和项目绩效指标。</p>' +
+      '</section>' +
+      '<section class="eval-report-section"><h4>五、初步评估结论与申报建议</h4>' +
+      '<p>综合政策条件、项目投资规模、设备购置比例和材料完整度，本项目初步评估得分为 <b>' + score + ' 分</b>，结论为：' + esc(r.level) + '。<span class="cite">[依据：政策条件逐项匹配结果]</span></p>' +
+      '<p>建议先完成材料缺口补正与低置信事项人工复核，再进入正式申报文书撰写阶段。重点核验事项包括开工证明、审计报告、设备合同/发票/付款回单一致性及项目备案内容与实际建设内容一致性。<span class="cite">[依据：材料比对 QC-20260801-03]</span></p>' +
+      '</section>' +
+      '</article></div>';
   }
 
   function scoreProofItems() {
@@ -1410,6 +1455,19 @@
       toast("欢迎回来，" + u.name + "（" + u.role + "）", "success");
     }, 300);
   }
+
+  function uploadMaterialModal(title, sub, okAction, okText) {
+    modal(title || "上传资料", sub || "支持上传资料窗口与本地文件夹目录索引两种方式",
+      '<div class="qa-block"><div class="qa-block-title">上传资料的窗口</div>' +
+      '<div class="folder-index-upload" style="margin-top:8px">' + icon("upload") +
+      '<div><b>点击选择资料文件</b><span>支持 PDF / Word / Excel / 图片等资料批量导入</span></div></div></div>' +
+      '<div class="qa-block" style="margin-top:14px"><div class="qa-block-title">从本地文件夹目录索引</div>' +
+      '<label class="field" style="margin-top:8px"><span>索引地址</span><input class="input" id="folder-index-path" placeholder="添加索引地址，例如：D:\\项目资料\\企业资料包"></label>' +
+      '<div class="folder-index-upload" style="margin-top:10px">' + icon("folder") +
+      '<div><b>添加本地文件夹目录索引</b><span>系统将按目录索引分类合同、发票、付款回单、设备照片与申报附件</span></div></div></div>',
+      '<button class="btn btn-outline" data-close="modal">取消</button><button class="btn btn-primary" data-action="' + okAction + '">' + (okText || "上传并解析") + "</button>");
+  }
+
   function renderNotifications() {
     $("#notify-list").innerHTML = GQ.notifications.map(n =>
       '<div class="drop-item"><span class="dot ' + (n.level === "red" ? "dot-red" : n.level === "yellow" ? "dot-yellow" : "dot-blue") + '"></span><div><b>' + esc(n.title) + '</b><span>' + esc(n.text) + "</span><time>" + esc(n.time) + "</time></div></div>").join("");
@@ -1458,11 +1516,13 @@
         renderView();
         break;
       case "app-new-project":
-        modal("新增企业项目", "创建后进入项目管理，可通过文件夹目录索引上传分类资料",
+        modal("新增企业项目", "创建后进入项目管理，并指定唯一技术人员负责资料核对与技术口径确认",
           '<div class="form-grid"><label class="field"><span>企业名称</span><input class="input" placeholder="请输入企业名称"></label>' +
           '<label class="field"><span>申报项目类型</span><select class="select"><option>国债两新</option><option>设备更新</option><option>技术改造</option></select></label></div>' +
           '<label class="field" style="margin-top:14px"><span>项目描述</span><textarea class="input" rows="4" placeholder="说明项目建设内容、设备更新范围、申报目标等"></textarea></label>' +
-          '<div class="qa-block" style="margin-top:14px"><div class="qa-block-title">企业资料上传</div><div class="folder-index-upload">' + icon("folder") + '<div><b>文件夹目录索引上传</b><span>支持按申报附件、设备合同、发票、付款回单、设备照片等目录识别并分类入库</span></div></div></div>',
+          '<label class="field" style="margin-top:14px"><span>技术人员</span><select class="select">' +
+          GQ.accounts.filter(a => a.status === "启用" && a.dept === "项目部").map(a => '<option>' + esc(a.name) + " · " + esc(a.role) + "</option>").join("") +
+          '</select></label>',
           '<button class="btn btn-outline" data-close="modal">取消</button><button class="btn btn-primary" data-action="app-new-project-save">创建项目</button>');
         break;
       case "app-new-project-save":
@@ -1470,9 +1530,7 @@
         toast("企业项目已创建，资料目录索引已进入解析队列（演示）", "success");
         break;
       case "app-upload":
-        modal("上传企业资料", "支持合同、发票、付款回单、设备照片、申报附件等资料批量导入",
-          '<div class="folder-index-upload" style="margin-top:8px">' + icon("upload") + '<div><b>点击选择企业资料文件夹</b><span>系统将按目录索引自动分类合同、发票、付款回单与设备照片</span></div></div>',
-          '<button class="btn btn-outline" data-close="modal">取消</button><button class="btn btn-primary" data-action="app-upload-ok">导入并识别</button>');
+        uploadMaterialModal("上传企业资料", "上传资料的窗口，可补充本地文件夹目录索引地址", "app-upload-ok", "导入并识别");
         break;
       case "app-upload-ok":
         closeModal();
@@ -1496,6 +1554,22 @@
       }
       case "app-delete-file":
         toast("文件已从当前资料包移除（演示，不删除本地文件）", "success");
+        break;
+      case "app-select-compare-text":
+        modal("选择企业资料库文本", "从知识库的企业资料库中多选文本片段，作为横向比对样本",
+          '<div class="qa-block"><div class="qa-block-title">企业资料库 / 可比对文本</div>' +
+          [
+            ["历史申报文书", "项目建设背景与必要性 · 设备更新类通用表述"],
+            ["企业资料包", "设备清单与技术参数 · 数控加工/检测/转运工序"],
+            ["历史案例", "节能降碳与安全环保 · 能耗基线和绩效口径"],
+            ["企业画像", "主营业务与产线特色 · 客户交付与质量体系"]
+          ].map((x, i) => '<label class="setting-row compare-text-option"><div><b>' + esc(x[0]) + '</b><span>' + esc(x[1]) + '</span></div><input type="checkbox" ' + (i < 3 ? "checked" : "") + "></label>").join("") +
+          '</div>',
+          '<button class="btn btn-outline" data-close="modal">取消</button><button class="btn btn-primary" data-action="app-compare-text-ok">开始比对</button>');
+        break;
+      case "app-compare-text-ok":
+        closeModal();
+        toast("已选择企业资料库文本，开始进行横向比对", "success");
         break;
       case "app-chapter":
         state.activeOutline = el.dataset.id || "base";
@@ -1620,12 +1694,7 @@
         break;
       case "kb-download": toast("文档已加入下载任务（演示）", "success"); break;
       case "kb-upload":
-        modal("上传文件", "支持 PDF / Word / Excel / 图片 OCR，上传后自动解析并打权限标签",
-          '<div style="border:1px dashed #c7d7f7;border-radius:8px;padding:32px;text-align:center;color:#64748b;background:#f8fbff">' + icon("upload") +
-          '<div style="margin-top:10px"><b style="color:#1a73e8">点击选择文件</b><br><span style="font-size:12px">最多 20 个文件，单个不超过 50MB</span></div></div>' +
-          '<div class="form-grid" style="margin-top:14px"><label class="field"><span>资料类型</span><select class="select"><option>政策库</option><option>企业资料</option><option>历史案例</option><option>内部经验</option></select></label>' +
-          '<label class="field"><span>权限级别</span><select class="select"><option>公开</option><option>内部</option><option>机密</option></select></label></div>',
-          '<button class="btn btn-outline" data-close="modal">取消</button><button class="btn btn-primary" data-action="kb-upload-run">上传并解析</button>');
+        uploadMaterialModal("上传资料", "上传资料的窗口，可补充本地文件夹目录索引地址", "kb-upload-run", "上传并解析");
         break;
       case "kb-upload-run": {
         const mask = $(".modal-mask");
@@ -1724,6 +1793,11 @@
         break;
       }
       case "company-follow": toast(el.dataset.id + " 已转入跟进池", "success"); break;
+      case "company-add-candidate":
+        state.candidateIds.add(el.dataset.id);
+        renderView();
+        toast("已加入候选企业清单", "success");
+        break;
       case "company-import": companyImportModal(); break;
       case "company-import-run": runCompanyImport(); break;
       case "company-export": toast("候选企业清单已导出（演示）", "success"); break;
