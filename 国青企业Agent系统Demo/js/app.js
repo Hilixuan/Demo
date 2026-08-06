@@ -52,6 +52,163 @@
     candidateIds: new Set(["C01", "C02", "C03"])
   };
 
+  const AGENT_MARKS = {
+    projectAlert: {
+      title: "项目进度与资料告警",
+      agent: "项目权限Agent + 申报材料Agent",
+      desc: "项目权限Agent负责项目可见范围、项目分配和进度状态；申报材料Agent联动材料齐备度，触发资料缺失严重、进度停滞等告警。",
+      input: "项目主数据、项目成员关系、申报进度、材料状态、告警记录。",
+      output: "项目告警、进度异常提示、资料缺失提醒、项目状态联动结果。",
+      acceptance: "项目运营人员可查看全部项目；技术人员仅可见本人负责项目；进度停滞/材料缺失严重可自动告警；全部操作有权限校验与审计。"
+    },
+    materialUpload: {
+      title: "企业资料上传与目录索引",
+      agent: "申报材料Agent + 项目权限Agent",
+      desc: "申报材料Agent读取企业资料包或本地目录索引，识别合同、发票、付款回单、设备照片、申报附件等资料；项目权限Agent控制资料读取和导出权限。",
+      input: "企业资料文件夹、知识库企业资料包、材料需求文件/模板、政策材料要求。",
+      output: "文件分类、元数据抽取结果、材料入库状态、资料维护留痕。",
+      acceptance: "支持按目录索引导入资料；仅项目成员可访问；企业资料读取、下载、导出需权限校验；人工修改记录操作人。"
+    },
+    materialScan: {
+      title: "Agent资料识别",
+      agent: "申报材料Agent",
+      desc: "扫描企业资料并进行OCR/解析、文件分类、数据清洗、脏数据识别、缺失资料提示和逻辑矛盾检测。",
+      input: "企业资料文件、材料需求清单、政策材料要求、人工已解决记录。",
+      output: "已具备/缺失/疑似不合规/疑似过期/需人工确认状态，判定依据和个人工作清单。",
+      acceptance: "每条识别结果需展示判定依据；点击已解决只移出个人工作清单，若资料未实际补齐，下次AI识别仍会重新提示。"
+    },
+    chapterOutline: {
+      title: "章节资料完整度检查",
+      agent: "申报材料Agent + 智库Agent",
+      desc: "根据两新专项模板、评分标准和企业资料，生成文书一级目录，逐章检查写作所需资料完整度和缺失数据类型。",
+      input: "企业资料包、专项政策模板、文书模板、评分标准、历史样本。",
+      output: "章节大纲、每章完整度、资料缺口、需人工确认项。",
+      acceptance: "能基于材料包和模板生成提纲；每章显示完整度和缺失资料；缺失资料可点击查看；无依据内容不得写成事实。"
+    },
+    docGenerate: {
+      title: "两新文书生成",
+      agent: "申报材料Agent",
+      desc: "执行解析企业资料、政策条件映射、生成提纲、章节草稿、附件匹配和资料缺口标注，生成文书主体内容。",
+      input: "材料管理已确认的企业资料包、专项政策模板、评分标准、历史样本和用户生成要求。",
+      output: "申报文书初稿、附件清单、问题清单、资料缺口标注、实时缓存草稿。",
+      acceptance: "生成过程需有AI动效和进度；生成后文书主体可查看；未手动存档时持续覆盖当前草稿；定稿版本可追溯。"
+    },
+    docRealtime: {
+      title: "文书实时校验与版本留痕",
+      agent: "申报材料Agent + 项目权限Agent",
+      desc: "对当前草稿进行实时校验、缓存和版本管理；导出、存档、历史记录等动作需权限校验并留痕。",
+      input: "最新文书草稿、章节缺口、用户微调记录、版本快照。",
+      output: "实时草稿、手动存档版本、历史记录、导出文档。",
+      acceptance: "点击存档才生成历史快照；未存档修改覆盖最新草稿；导出需权限校验并记录审计。"
+    },
+    writerChat: {
+      title: "对话式文书微调",
+      agent: "申报材料Agent + 智库Agent",
+      desc: "围绕当前文书草稿和参考文件执行局部改写、章节补强、数值口径说明和证据引用补充。",
+      input: "当前草稿、选中参考文件、用户调优要求、政策/评分标准和历史样本。",
+      output: "候选改写建议、局部更新后的草稿、引用依据和操作记录。",
+      acceptance: "支持对话微调；输出建议需围绕当前文书和已选资料；重要修改需人工确认后覆盖当前草稿。"
+    },
+    locateTune: {
+      title: "定位调优",
+      agent: "申报材料Agent",
+      desc: "支持定位某个段落、数值、图表或章节，并只对定位范围生成修改建议，避免影响整篇文书结构。",
+      input: "定位目标、当前文书草稿、用户修改说明、相关证据材料。",
+      output: "定位高亮、局部修改建议、覆盖后的当前草稿。",
+      acceptance: "能定位到章节/段落/数值/图表；Agent仅对定位范围生成建议；修改需人工确认。"
+    },
+    compareSelect: {
+      title: "横向比对文本选择",
+      agent: "申报材料Agent + 项目权限Agent",
+      desc: "从知识库企业资料库中多选授权文本，作为同机构文书横向比对样本；项目权限Agent控制跨企业比对范围和脱敏展示。",
+      input: "企业资料库文本、历史申报文书、历史案例、企业画像和授权范围。",
+      output: "已选比对文本、可用横向比对样本、脱敏比对范围。",
+      acceptance: "横向比对需先选择授权文本；敏感数据脱敏显示；无权限企业资料不可参与比对。"
+    },
+    aiTune: {
+      title: "同质化检测与特色增强",
+      agent: "申报材料Agent",
+      desc: "读取当前文书章节、表格、指标、附件引用和关键事实，识别与其他文书相似度过高的段落，并提示差异化修改方向。",
+      input: "当前文书草稿、已选横向比对文本、政策细则、企业资料和历史样本。",
+      output: "高相似段落、相似度、风险等级、企业特色补强建议、定位入口。",
+      acceptance: "能识别高相似段落并定位到章节；给出原因与风险等级；自动修改需人工授权；二次差异化校验通过后可流转。"
+    },
+    score: {
+      title: "AI评分",
+      agent: "申报材料Agent + 智库Agent",
+      desc: "根据评分标准对文书进行综合评分，结合政策细则和历史案例输出优劣势、综合评估报告和优化建议。",
+      input: "文书终稿、评分标准、政策细则、企业资料、历史案例。",
+      output: "综合得分、维度得分、优势/劣势、优化建议和综合评估报告。",
+      acceptance: "能按评分标准综合评分；各维度得分可展示；修改建议需有依据；评分批次可追溯。"
+    },
+    proofread: {
+      title: "AI校对",
+      agent: "申报材料Agent",
+      desc: "对全文执行数据一致性、政策条件覆盖、证据引用、行文逻辑和格式规范校验，定位到章节、表格或附件。",
+      input: "文书终稿、附件材料、政策评分细则、企业数据和项目资料库。",
+      output: "建议修改条数、问题位置、风险等级、原因说明、候选修改建议。",
+      acceptance: "校对问题需定位到具体位置；建议有原因和风险等级；只允许对单条提示进行授权修改或提示级微调。"
+    },
+    archive: {
+      title: "导出与归档",
+      agent: "项目权限Agent + 申报材料Agent",
+      desc: "项目权限Agent负责导出审批、归档权限和审计；申报材料Agent关联文书版本、材料清单与质检批次。",
+      input: "最终文书、评分/校对结果、材料清单、质检批次、归档动作。",
+      output: "导出文档、归档项目、只读项目详情、重启制作入口。",
+      acceptance: "导出和归档需权限校验并留痕；归档后项目进度100%且不可操作；支持重新启动制作。"
+    }
+  };
+
+  const AGENT_PRD_MARKS = {
+    material: {
+      title: "材料核验 Agent",
+      agent: "2. 材料核验 Agent",
+      role: "申报材料的智能鉴定师，负责上传解析、清洗比对和缺口识别。",
+      capabilities: ["多格式解析", "元数据抽取", "材料清单比对", "缺口识别", "材料包快照"],
+      input: "上传材料包（文件列表 + 项目信息）。包括材料包上传（多格式文件列表）+ 项目 ID、按项目类型匹配的材料需求清单、OCR 低置信度确认结果、材料齐备确认指令。",
+      output: "材料核验比对报告（整体状态 + 逐项状态 + 补充清单）或材料包快照。",
+      collaboration: "低置信度 OCR / 疑似不合规由人工逐条确认；材料齐备确认由人工最终确认，防漏检。",
+      quality: "OCR 文本提取准确率 ≥ 95%；材料状态判断准确率 ≥ 90%；缺失项识别召回率 ≥ 98%；单次核验平均耗时 ≤ 2 分钟。"
+    },
+    writer: {
+      title: "文书生成 Agent",
+      agent: "3. 文书生成 Agent",
+      role: "基于材料包和政策模板的申报文书智能写作师。",
+      capabilities: ["模板匹配", "覆盖度分析", "提纲预览", "初稿生成", "章节级对话微调", "版本管理"],
+      input: "“材料就绪”信号 + 材料包快照 ID + 项目类型 + 申报需求。还包括提纲确认、章节级修改指令、保留版本指令、评审不通过 + 问题清单。",
+      output: "章节模板框架 + 覆盖度分析报告 + 提纲预览 + 初稿正文（含材料来源引用和置信度标注）。",
+      collaboration: "提纲确认、初稿审阅、版本保留由人工确认；缺口决策由人工判断补充材料还是放宽要求；对话微调超过 5 轮未定稿时建议保留版本或重写。",
+      quality: "评分要点覆盖率 ≥ 95%；材料来源可溯源率 ≥ 90%；编造数据（幻觉率）≤ 2%；人工修改率 ≤ 20%；初稿生成耗时 ≤ 5 分钟。"
+    },
+    qc: {
+      title: "调优质检 Agent",
+      agent: "4. 调优质检 Agent",
+      role: "申报文书的全面质检师，在 AI 评审前执行基础合规校验，拦截低质量文稿。",
+      capabilities: ["五类校验", "横向比对", "差异性检测", "校订版生成"],
+      input: "文书初稿（含章节结构和内容）+ 同批次其他企业文书（脱敏后）。还包括历史高分文书、校订版生成授权。",
+      output: "结构化质检报告（五类校验结果 + 横向比对结果 + 差异性检测结果 + 问题清单 + 修改建议）。",
+      collaboration: "质检报告输出问题清单 + 修改建议，不设通过/不通过判定；人工逐条确认是否采纳；校订版生成必须人工授权；横向比对阈值可人工调整。",
+      quality: "问题定位到章节/段落/表格/附件；修改建议有原因和风险等级；校订版保留原稿只读备份 + 批注 + 修订记录。"
+    },
+    review: {
+      title: "AI 评审 Agent",
+      agent: "5. AI 评审 Agent",
+      role: "模拟评审专家的角色，按《评分标准》对文书逐维度打分，输出问题清单和调优建议。",
+      capabilities: ["评分标准解析", "多维度打分", "扣分原因生成", "问题清单分级", "调优建议定位"],
+      input: "质检验通过的文书 + 对应项目类型的评分标准（各维度权重与细则）。还包括评分标准、人工确认反馈、历史评审样本。",
+      output: "多维打分报告（逐维度分数 + 扣分原因 + 综合得分）+ 问题清单（按严重程度分级）+ 调优建议（定位到章节段落）。",
+      collaboration: "评审结果仅作为辅助决策；问题清单和调优建议需要人工确认后再进入修改或定稿流程。",
+      quality: "按评分标准逐维度给分；扣分原因可解释；调优建议定位到章节段落；评分批次与依据可追溯。"
+    }
+  };
+
+  const AGENT_MARK_ALIASES = {
+    materialUpload: "material",
+    docGenerate: "writer",
+    qcEntry: "qc",
+    score: "review"
+  };
+
   /* ===== 图标 ===== */
   const ICONS = {
     home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-6h6v6"/>',
@@ -143,6 +300,33 @@
     else if (/缺失|失败|拦截|异常|停用|高|必须|风险/.test(t)) cls = "tag-red";
     else if (/建议|信息|新建|公开|内部|备案/.test(t)) cls = "tag-blue";
     return '<span class="tag ' + cls + '">' + esc(t) + "</span>";
+  }
+
+  function agentMark(id) {
+    if (!AGENT_MARK_ALIASES[id]) return "";
+    return '<button class="agent-mark-dot" data-action="agent-mark" data-mark="' + esc(id) + '" title="查看 Agent PRD" aria-label="查看 Agent PRD"></button>';
+  }
+
+  function agentTitle(text, id) {
+    return '<span class="agent-title-mark"><span>' + esc(text) + '</span>' + agentMark(id) + '</span>';
+  }
+
+  function agentMarkModal(id) {
+    const m = AGENT_PRD_MARKS[AGENT_MARK_ALIASES[id]];
+    if (!m) return;
+    const caps = m.capabilities.map(x => '<span class="agent-cap-chip">' + esc(x) + '</span>').join("");
+    drawer(m.title, m.agent,
+      '<div class="agent-spec">' +
+      '<div class="agent-spec-hero"><div class="agent-spec-dot"></div><div><b>角色定位</b><p>' + esc(m.role) + '</p></div></div>' +
+      '<div class="agent-spec-section"><b>核心能力</b><div class="agent-cap-list">' + caps + '</div></div>' +
+      '<div class="agent-spec-grid">' +
+      '<div><b>输入</b><p>' + esc(m.input) + '</p></div>' +
+      '<div><b>输出</b><p>' + esc(m.output) + '</p></div>' +
+      '</div>' +
+      '<div class="agent-spec-accept"><b>人机协同</b><p>' + esc(m.collaboration) + '</p></div>' +
+      '<div class="agent-spec-accept"><b>质量要求</b><p>' + esc(m.quality) + '</p></div>' +
+      '</div>',
+      '<button class="btn btn-primary" data-close="drawer">我知道了</button>');
   }
 
   /* ===== 流程动画 ===== */
@@ -1021,7 +1205,7 @@
       '<button class="app-alert-toggle" data-action="app-toggle-alert">' + icon(state.alertCollapsed ? "bell" : "x") + '</button>' +
       (state.alertCollapsed
         ? '<div class="app-alert-mini"><div class="ai-orbit tiny"><b>AI</b></div><span>告警 3</span></div>'
-        : '<div class="app-alert-float-body"><div class="ai-orbit tiny"><b>AI</b></div><div><div class="app-alert-title">AI告警信息</div>' + alerts + '</div></div>') +
+        : '<div class="app-alert-float-body"><div class="ai-orbit tiny"><b>AI</b></div><div><div class="app-alert-title">' + agentTitle("AI告警信息", "projectAlert") + '</div>' + alerts + '</div></div>') +
       '</div>' + years;
   }
 
@@ -1039,7 +1223,7 @@
       : state.applicationTab === "tune" ? viewAiTuneV2(app)
       : viewSmartScoreV2(app);
     const topActions = state.applicationTab === "score"
-      ? '<div class="score-global-actions"><button class="btn btn-outline btn-sm" data-action="app-export-doc">' + icon("download") + '导出文档</button><button class="btn btn-primary btn-sm" data-action="app-archive"' + (readonly ? " disabled" : "") + '>' + icon("lock") + '归档项目</button></div>'
+      ? '<div class="score-global-actions">' + agentMark("archive") + '<button class="btn btn-outline btn-sm" data-action="app-export-doc">' + icon("download") + '导出文档</button><button class="btn btn-primary btn-sm" data-action="app-archive"' + (readonly ? " disabled" : "") + '>' + icon("lock") + '归档项目</button></div>'
       : "";
     return '<div class="app-workspace-head">' +
       '<div class="page-actions"><button class="btn btn-outline btn-sm" data-action="app-back">' + icon("chevron") + "返回项目管理</button>" +
@@ -1057,10 +1241,10 @@
       "<tr><td><b>" + esc(f.name) + '</b><div style="font-size:12px;color:#64748b">' + esc(f.group) + "</div></td><td>" + esc(f.type) + "</td><td>" + esc(f.size) + "</td><td>" + st(f.status) + "</td><td>" + esc(f.note) + "</td>" +
       '<td style="white-space:nowrap"><span class="link" data-action="material-view" data-name="' + esc(f.name) + '">查看</span> · <span class="link" data-action="app-delete-file" data-id="' + f.id + '">删除</span></td></tr>').join("");
     return '<div class="grid-2-1 app-section">' +
-      '<div class="card"><div class="card-head"><div><div class="card-title">企业文件资料</div><div class="card-sub">资料已按申报附件、设备证据、淘汰设备证明等目录分类展示</div></div>' +
-      '<div class="page-actions"><button class="btn btn-primary btn-sm" data-action="app-upload"' + (readonly ? " disabled" : "") + '>' + icon("upload") + "上传</button><button class=\"btn btn-outline btn-sm\" data-action=\"app-scan\"" + (readonly ? " disabled" : "") + ">" + icon("spark") + "AI识别</button></div></div>" +
+      '<div class="card"><div class="card-head"><div><div class="card-title">' + agentTitle("企业文件资料", "materialUpload") + '</div><div class="card-sub">资料已按申报附件、设备证据、淘汰设备证明等目录分类展示</div></div>' +
+      '<div class="page-actions">' + agentMark("materialScan") + '<button class="btn btn-primary btn-sm" data-action="app-upload"' + (readonly ? " disabled" : "") + '>' + icon("upload") + "上传</button><button class=\"btn btn-outline btn-sm\" data-action=\"app-scan\"" + (readonly ? " disabled" : "") + ">" + icon("spark") + "AI识别</button></div></div>" +
       '<div class="table-wrap"><table class="table"><thead><tr><th>文件</th><th>类型</th><th>大小</th><th>状态</th><th>识别说明</th><th>操作</th></tr></thead><tbody>' + rows + "</tbody></table></div></div>" +
-      '<div class="card ai-side-panel"><div class="card-head"><div><div class="card-title">Agent 资料识别</div><div class="card-sub">缺失资料、逻辑矛盾与证据链检测</div></div>' + st(state.aiScanDone ? "识别完成" : "待识别") + '</div>' +
+      '<div class="card ai-side-panel"><div class="card-head"><div><div class="card-title">' + agentTitle("Agent 资料识别", "materialScan") + '</div><div class="card-sub">缺失资料、逻辑矛盾与证据链检测</div></div>' + st(state.aiScanDone ? "识别完成" : "待识别") + '</div>' +
       '<div class="ai-orbit"><span></span><i></i><b>AI</b></div>' +
       '<div id="app-scan-result">' + (state.aiScanDone ? insightHtml() : '<div class="empty" style="padding:18px">' + icon("spark") + '<div>点击 AI识别 后展示资料缺失与矛盾检测结果</div></div>') + '</div></div></div>';
   }
@@ -1080,10 +1264,10 @@
   }
 
   function docTopActions(readonly) {
-    return '<div class="doc-top-actions"><button class="btn btn-outline btn-sm" data-action="doc-save-version"' + (readonly ? " disabled" : "") + '>' + icon("clock") + '存档</button>' +
+    return '<div class="doc-top-actions">' + agentMark("docRealtime") + '<button class="btn btn-outline btn-sm" data-action="doc-save-version"' + (readonly ? " disabled" : "") + '>' + icon("clock") + '存档</button>' +
       '<button class="btn btn-outline btn-sm" data-action="app-history">' + icon("clipboard") + '历史记录</button>' +
       '<button class="btn btn-outline btn-sm" data-action="doc-export">' + icon("download") + '导出 Word</button>' +
-      '<button class="icon-btn locate-top-btn" title="定位调优" aria-label="定位调优" data-action="app-locate" data-target="选择文书段落进行定位调优"' + (readonly ? " disabled" : "") + '>' + icon("target") + '</button></div>';
+      agentMark("locateTune") + '<button class="icon-btn locate-top-btn" title="定位调优" aria-label="定位调优" data-action="app-locate" data-target="选择文书段落进行定位调优"' + (readonly ? " disabled" : "") + '>' + icon("target") + '</button></div>';
   }
 
   function aiDocChip() {
@@ -1099,11 +1283,11 @@
       '<div><b>' + esc(ch.title) + '</b><span>' + outlineStatus(ch) + " · 完整度 " + ch.completeness + '%</span></div><div class="mini-bar"><i style="width:' + ch.completeness + '%"></i></div></button>').join("");
     const gaps = active.missing.length ? active.missing.map(g => '<span class="chip" style="background:#fee2e2;color:#ef4444">' + esc(g) + "</span>").join(" ") : '<span class="chip" style="background:#d1fae5;color:#059669">当前章节资料完整</span>';
     return '<div class="grid-1-2 app-section writer-layout">' +
-      '<div class="card"><div class="card-head"><div><div class="card-title">两新文书一级目录</div><div class="card-sub">根据参考模板提炼为演示大纲，逐章检查资料完整度</div></div></div>' +
+      '<div class="card"><div class="card-head"><div><div class="card-title">' + agentTitle("两新文书一级目录", "chapterOutline") + '</div><div class="card-sub">根据参考模板提炼为演示大纲，逐章检查资料完整度</div></div></div>' +
       '<div class="outline-list">' + outline + '</div>' +
       '<div class="qa-block" style="margin-top:16px"><div class="qa-block-title">当前章节缺失资料</div><div>' + gaps + '</div></div>' +
-      '<button class="btn btn-primary btn-block" data-action="app-generate-doc"' + (readonly ? " disabled" : "") + '>' + icon("spark") + (state.docGenerated ? "重新生成文书" : "生成文书") + '</button></div>' +
-      '<div class="card writer-doc-card"><div class="card-head"><div><div class="card-title">文书主体内容 ' + aiDocChip() + '</div><div class="card-sub">' + esc(app.shortName) + ' · 国债两新申报书 · ' + (state.docGenerated ? "最新草稿实时缓存" : "待生成") + '</div></div>' + docTopActions(readonly) + '</div>' +
+      '<div class="marked-action-row"><button class="btn btn-primary btn-block" data-action="app-generate-doc"' + (readonly ? " disabled" : "") + '>' + icon("spark") + (state.docGenerated ? "重新生成文书" : "生成文书") + '</button>' + agentMark("docGenerate") + '</div></div>' +
+      '<div class="card writer-doc-card"><div class="card-head"><div><div class="card-title">' + agentTitle("文书主体内容", "docRealtime") + " " + aiDocChip() + '</div><div class="card-sub">' + esc(app.shortName) + ' · 国债两新申报书 · ' + (state.docGenerated ? "最新草稿实时缓存" : "待生成") + '</div></div>' + docTopActions(readonly) + '</div>' +
       '<div id="app-doc-panel">' + (state.docGenerated ? docDraftHtml(app) : docWaitingHtml(active)) + '</div>' + writerBottomChat(readonly) + '</div></div>';
   }
 
@@ -1130,7 +1314,7 @@
   }
 
   function writerBottomChat(readonly) {
-    return '<div class="writer-bottom-chat"><button class="btn btn-outline btn-sm" data-action="app-reference-file"' + (readonly ? " disabled" : "") + '>' + icon("paperclip") + '选择参考文件</button>' +
+    return '<div class="writer-bottom-chat">' + agentMark("writerChat") + '<button class="btn btn-outline btn-sm" data-action="app-reference-file"' + (readonly ? " disabled" : "") + '>' + icon("paperclip") + '选择参考文件</button>' +
       '<input class="input" id="writer-chat-input" placeholder="输入调优要求，例如：按参考文件补充设备真实性说明，或调整第四章资金口径"' + (readonly ? " disabled" : "") + '>' +
       '<button class="btn btn-primary" data-action="app-writer-chat"' + (readonly ? " disabled" : "") + '>' + icon("send") + '发送调优</button></div>';
   }
@@ -1173,11 +1357,11 @@
     const compare = tuneSimilarityData().map((x, i) =>
       '<div class="similarity-card"><div class="similarity-head"><div>' + st(x.level) + '<b>' + esc(x.chapter) + '</b></div><span>' + x.similarity + '%</span></div>' +
       '<div class="similarity-meter"><i style="width:' + x.similarity + '%"></i></div><p><b>雷同片段：</b>' + esc(x.target) + '</p><p><b>横向对比：</b>' + esc(x.compare) + '</p>' +
-      '<div class="ai-suggestion">' + icon("spark") + '<span>' + esc(x.advice) + '</span></div><div class="page-actions"><button class="btn btn-outline btn-sm" data-action="app-locate" data-target="' + esc(x.chapter) + '"' + (readonly ? " disabled" : "") + '>' + icon("target") + '定位</button><button class="btn btn-primary btn-sm" data-action="app-tune-apply" data-id="' + i + '"' + (readonly ? " disabled" : "") + '>人工确认修改</button></div></div>').join("");
-    return '<div class="tune-workbench app-section"><div class="card"><div class="card-head"><div><div class="card-title">当前企业文书草稿 ' + aiDocChip() + '</div><div class="card-sub">读取文书智写最新草稿，支持人工手动调整</div></div>' + docTopActions(readonly) + '</div><div class="ai-line"><span></span><b>Agent 正在扫描段落相似度、企业特色缺口和通用化表达</b></div>' + docEditorHtml(readonly) +
-      '<div class="writer-bottom-chat tune-inline-chat"><button class="btn btn-outline btn-sm" data-action="app-reference-file"' + (readonly ? " disabled" : "") + '>' + icon("paperclip") + '选择参考文件</button><input class="input" id="tune-input" placeholder="输入局部调优要求，例如：降低同质化、强化当前企业特色"' + (readonly ? " disabled" : "") + '><button class="btn btn-primary" data-action="app-refine"' + (readonly ? " disabled" : "") + '>' + icon("send") + '微调</button></div></div>' +
-      '<div class="tune-side"><div class="card"><div class="card-head"><div><div class="card-title">项目库横向对比</div><div class="card-sub">先从知识库「企业资料库」多选文本，再进行同机构文书交叉验证</div></div><div class="ai-orbit tiny"><b>AI</b></div></div>' +
-      '<button class="btn btn-outline btn-block compare-select-btn" data-action="app-select-compare-text"' + (readonly ? " disabled" : "") + '>' + icon("database") + '选择企业资料库文本</button>' +
+      '<div class="ai-suggestion">' + icon("spark") + '<span>' + esc(x.advice) + '</span></div><div class="page-actions">' + agentMark("aiTune") + '<button class="btn btn-outline btn-sm" data-action="app-locate" data-target="' + esc(x.chapter) + '"' + (readonly ? " disabled" : "") + '>' + icon("target") + '定位</button><button class="btn btn-primary btn-sm" data-action="app-tune-apply" data-id="' + i + '"' + (readonly ? " disabled" : "") + '>人工确认修改</button></div></div>').join("");
+    return '<div class="tune-workbench app-section"><div class="card"><div class="card-head"><div><div class="card-title">' + agentTitle("当前企业文书草稿", "aiTune") + " " + aiDocChip() + '</div><div class="card-sub">读取文书智写最新草稿，支持人工手动调整</div></div>' + docTopActions(readonly) + '</div><div class="ai-line"><span></span><b>Agent 正在扫描段落相似度、企业特色缺口和通用化表达</b></div>' + docEditorHtml(readonly) +
+      '<div class="writer-bottom-chat tune-inline-chat">' + agentMark("writerChat") + '<button class="btn btn-outline btn-sm" data-action="app-reference-file"' + (readonly ? " disabled" : "") + '>' + icon("paperclip") + '选择参考文件</button><input class="input" id="tune-input" placeholder="输入局部调优要求，例如：降低同质化、强化当前企业特色"' + (readonly ? " disabled" : "") + '><button class="btn btn-primary" data-action="app-refine"' + (readonly ? " disabled" : "") + '>' + icon("send") + '微调</button></div></div>' +
+      '<div class="tune-side"><div class="card"><div class="card-head"><div><div class="card-title">' + agentTitle("项目库横向对比", "qcEntry") + '</div><div class="card-sub">先从知识库「企业资料库」多选文本，再进行同机构文书交叉验证</div></div><div class="ai-orbit tiny"><b>AI</b></div></div>' +
+      '<div class="marked-action-row"><button class="btn btn-outline btn-block compare-select-btn" data-action="app-select-compare-text"' + (readonly ? " disabled" : "") + '>' + icon("database") + '选择企业资料库文本</button>' + agentMark("compareSelect") + '</div>' +
       '<div class="compare-source-note"><b>已选文本：</b>企业资料库 / 历史申报文书 / 设备更新类章节片段 3 条</div>' + compare + '</div></div></div>';
   }
 
@@ -1245,12 +1429,12 @@
     const readonly = appArchived(app);
     const proof = scoreProofItems().filter(x => !state.scoreResolved.has(x.id));
     const proofHtml = proof.length ? proof.map(x =>
-      '<div class="proof-card"><div class="score-issue"><div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' + st(x.level) + '<b>' + esc(x.pos) + '</b></div><p>' + esc(x.text) + '</p><span>建议：' + esc(x.suggest) + '</span></div></div><div class="page-actions"><button class="btn btn-outline btn-sm" data-action="app-score-manual" data-id="' + x.id + '"' + (readonly ? " disabled" : "") + '>' + icon("edit") + '手动修改</button><button class="btn btn-outline btn-sm" data-action="app-score-chat" data-id="' + x.id + '"' + (readonly ? " disabled" : "") + '>' + icon("chat") + '针对提示微调</button><button class="btn btn-primary btn-sm" data-action="app-score-fix" data-id="' + x.id + '"' + (readonly ? " disabled" : "") + '>' + icon("check") + '同意修改</button></div></div>').join("") : '<div class="empty">' + icon("check") + '<div>全文最终校对问题已处理，可导出并归档项目</div></div>';
+      '<div class="proof-card"><div class="score-issue"><div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' + st(x.level) + '<b>' + esc(x.pos) + '</b></div><p>' + esc(x.text) + '</p><span>建议：' + esc(x.suggest) + '</span></div></div><div class="page-actions">' + agentMark("proofread") + '<button class="btn btn-outline btn-sm" data-action="app-score-manual" data-id="' + x.id + '"' + (readonly ? " disabled" : "") + '>' + icon("edit") + '手动修改</button><button class="btn btn-outline btn-sm" data-action="app-score-chat" data-id="' + x.id + '"' + (readonly ? " disabled" : "") + '>' + icon("chat") + '针对提示微调</button><button class="btn btn-primary btn-sm" data-action="app-score-fix" data-id="' + x.id + '"' + (readonly ? " disabled" : "") + '>' + icon("check") + '同意修改</button></div></div>').join("") : '<div class="empty">' + icon("check") + '<div>全文最终校对问题已处理，可导出并归档项目</div></div>';
     return '<div class="score-workbench app-section"><div class="card writer-doc-card"><div class="card-head"><div><div class="card-title">文书终稿预览 ' + aiDocChip() + '</div><div class="card-sub">用于评分和全文校对的最新草稿</div></div>' + docTopActions(readonly) + '</div><div class="doc-preview app-doc-preview score-doc-preview">' +
       sampleReportSections().map((ch, idx) => '<section id="score-doc-sec-' + idx + '"><h3>' + esc(ch.title) + '</h3><p>' + esc(ch.text) + '</p><p class="cite">' + esc(ch.cite) + '</p></section>').join("") + '</div></div>' +
-      '<div class="score-side"><div class="card score-ai-card ' + (state.scoreCollapsed ? "collapsed" : "") + '"><div class="card-head"><div><div class="card-title">AI评分</div><div class="card-sub">可收起查看，综合得分 88</div></div><button class="btn btn-outline btn-sm" data-action="app-toggle-score">' + (state.scoreCollapsed ? "展开" : "收起") + '</button></div>' +
+      '<div class="score-side"><div class="card score-ai-card ' + (state.scoreCollapsed ? "collapsed" : "") + '"><div class="card-head"><div><div class="card-title">' + agentTitle("AI评分", "score") + '</div><div class="card-sub">可收起查看，综合得分 88</div></div><button class="btn btn-outline btn-sm" data-action="app-toggle-score">' + (state.scoreCollapsed ? "展开" : "收起") + '</button></div>' +
       (state.scoreCollapsed ? "" : '<div class="score-hero compact"><div class="score-ring-wrap">' + ring(88, "#1a73e8") + '<div class="ai-scan-beam"></div></div><div class="score-report"><h3>综合评估报告</h3><p>当前文书综合得分 88 分，政策契合度和格式规范表现较好；短板集中在材料完整性、资金口径一致性、节能测算依据和企业特色表达。</p></div></div><div class="chart-bars compact"><div><span>政策契合</span><i style="width:92%"></i><b>92</b></div><div><span>材料完整</span><i style="width:78%"></i><b>78</b></div><div><span>证据支撑</span><i style="width:85%"></i><b>85</b></div><div><span>行文逻辑</span><i style="width:88%"></i><b>88</b></div><div><span>格式规范</span><i style="width:96%"></i><b>96</b></div></div>') + '</div>' +
-      '<div class="card score-proof-panel"><div class="card-head"><div><div class="card-title">AI校对</div><div class="card-sub">建议修改 ' + proof.length + ' 条 · 固定高度滚动</div></div><div class="ai-orbit tiny"><b>AI</b></div></div><div class="ai-line"><span></span><b>校对光标正在锁定逻辑错误、前后矛盾和数据口径风险</b></div><div class="proof-scroll">' + proofHtml + '</div></div></div></div>';
+      '<div class="card score-proof-panel"><div class="card-head"><div><div class="card-title">' + agentTitle("AI校对", "proofread") + '</div><div class="card-sub">建议修改 ' + proof.length + ' 条 · 固定高度滚动</div></div><div class="ai-orbit tiny"><b>AI</b></div></div><div class="ai-line"><span></span><b>校对光标正在锁定逻辑错误、前后矛盾和数据口径风险</b></div><div class="proof-scroll">' + proofHtml + '</div></div></div></div>';
   }
 
   /* ===== 答辩准备 ===== */
@@ -1497,6 +1681,9 @@
   /* 动作分发（视图、弹窗、抽屉共用） */
   function handleAction(action, el) {
     switch (action) {
+      case "agent-mark":
+        agentMarkModal(el.dataset.mark);
+        break;
       case "app-open":
         state.applicationId = el.dataset.id || "mkd-2026";
         state.applicationTab = "files";
