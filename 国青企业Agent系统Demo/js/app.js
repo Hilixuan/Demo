@@ -183,9 +183,9 @@
     qc: {
       title: "调优质检 Agent",
       agent: "4. 调优质检 Agent",
-      role: "申报文书的全面质检师，在 AI 评审前执行基础合规校验，拦截低质量文稿。",
+      role: "申报文书的全面质检师，在 AI 评审前执行基础合规校验，拦截低质量文稿，和其他文稿进行横向对比，对输出文稿进行差异化控制。",
       capabilities: ["五类校验", "横向比对", "差异性检测", "校订版生成"],
-      input: "文书初稿（含章节结构和内容）+ 同批次其他企业文书（脱敏后）。还包括历史高分文书、校订版生成授权。",
+      input: "文书初稿（含章节结构和内容）+ 同批次其他企业文书（脱敏后）+ 校订版生成授权。",
       output: "结构化质检报告（五类校验结果 + 横向比对结果 + 差异性检测结果 + 问题清单 + 修改建议）。",
       collaboration: "质检报告输出问题清单 + 修改建议，不设通过/不通过判定；人工逐条确认是否采纳；校订版生成必须人工授权；横向比对阈值可人工调整。",
       quality: "问题定位到章节/段落/表格/附件；修改建议有原因和风险等级；校订版保留原稿只读备份 + 批注 + 修订记录。"
@@ -195,7 +195,7 @@
       agent: "5. AI 评审 Agent",
       role: "模拟评审专家的角色，按《评分标准》对文书逐维度打分，输出问题清单和调优建议。",
       capabilities: ["评分标准解析", "多维度打分", "扣分原因生成", "问题清单分级", "调优建议定位"],
-      input: "质检验通过的文书 + 对应项目类型的评分标准（各维度权重与细则）。还包括评分标准、人工确认反馈、历史评审样本。",
+      input: "质检验通过的文书 + 对应项目类型的评分标准（各维度权重与细则）。",
       output: "多维打分报告（逐维度分数 + 扣分原因 + 综合得分）+ 问题清单（按严重程度分级）+ 调优建议（定位到章节段落）。",
       collaboration: "评审结果仅作为辅助决策；问题清单和调优建议需要人工确认后再进入修改或定稿流程。",
       quality: "按评分标准逐维度给分；扣分原因可解释；调优建议定位到章节段落；评分批次与依据可追溯。"
@@ -204,7 +204,7 @@
 
   const AGENT_MARK_ALIASES = {
     materialUpload: "material",
-    docGenerate: "writer",
+    docRealtime: "writer",
     qcEntry: "qc",
     score: "review"
   };
@@ -1264,7 +1264,7 @@
   }
 
   function docTopActions(readonly) {
-    return '<div class="doc-top-actions">' + agentMark("docRealtime") + '<button class="btn btn-outline btn-sm" data-action="doc-save-version"' + (readonly ? " disabled" : "") + '>' + icon("clock") + '存档</button>' +
+    return '<div class="doc-top-actions"><button class="btn btn-outline btn-sm" data-action="doc-save-version"' + (readonly ? " disabled" : "") + '>' + icon("clock") + '存档</button>' +
       '<button class="btn btn-outline btn-sm" data-action="app-history">' + icon("clipboard") + '历史记录</button>' +
       '<button class="btn btn-outline btn-sm" data-action="doc-export">' + icon("download") + '导出 Word</button>' +
       agentMark("locateTune") + '<button class="icon-btn locate-top-btn" title="定位调优" aria-label="定位调优" data-action="app-locate" data-target="选择文书段落进行定位调优"' + (readonly ? " disabled" : "") + '>' + icon("target") + '</button></div>';
